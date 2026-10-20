@@ -1,0 +1,12 @@
+[package]
+name = "ansi-nist-itl"
+version = "0.1.0"
+edition = "2024"
+description = "Parser and writer for ANSI/NIST-ITL biometric transaction files"
+license = "MIT"
+repository = "https://github.com/ybdn/ansi-nist-itl"
+readme = "README.md"
+keywords = ["nist", "biometrics", "fingerprint", "ansi-nist-itl", "parser"]
+categories = ["parser-implementations", "encoding"]
+
+[dependencies]
