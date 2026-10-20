@@ -52,7 +52,7 @@ ansi-nist-itl (public, crates.io)  ◄── dépendance Cargo ──  nist-stud
 | NIST Studio (Rust) | Lecture, édition, écriture, diagnostic, accès aux données image |
 | Outils CLI / scripts | Validation, transformation en lot, extraction |
 | Services (serveur, pipeline) | Parsing rapide, sans état, sans I/O imposée |
-| Développeurs tiers | API documentée, stable, licence permissive |
+| Développeurs tiers | API documentée, stable, licence libre utilisable depuis du code propriétaire (CeCILL-C) |
 
 ---
 
@@ -142,9 +142,10 @@ Les fichiers réels (corpus de la v1, `nist-files/`) contiennent des **données 
 
 ## 7. Licence et propriété intellectuelle
 
-- **Licence** : **MIT** (décidé le 2026-10-20). Licence permissive, compatible avec un usage dans NIST Studio (propriétaire) ; en tant que seul titulaire des droits, l'auteur reste libre de son propre usage.
-- **Implémentation indépendante** : écrite à partir de la norme ANSI/NIST-ITL ; `nistitl` sert uniquement d'**oracle de comportement** (comparaison de sorties), aucun code n'en est traduit. Si du code venait à être porté, il relèverait de la CeCILL-C (copyleft sur le composant), ce qui reste compatible avec un usage propriétaire mais imposerait cette licence au composant.
-- **Crédits** : `nistitl` / IDEMIA cité dans le README.
+- **Licence** : **CeCILL-C v1.0** (décidé le 2026-10-20, remplace la décision MIT du même jour). Fichiers `LICENSE` (version anglaise) et `LICENSE-fr` (version française), les deux faisant foi ; `license = "CECILL-C"` dans `Cargo.toml`.
+- **Raison** : la spécification (`docs/SPEC.md`) reproduit le comportement de `nistitl` ligne à ligne ; la crate est donc un **portage** de `nistitl` (CeCILL-C, IDEMIA) et doit en suivre la licence.
+- **Conséquences** : copyleft limité au composant. Les modifications de la crate sont redistribuées sous CeCILL-C ; un logiciel qui l'utilise comme dépendance (NIST Studio, propriétaire) reste libre de sa licence. Droit français, tribunaux de Paris (art. 13).
+- **Crédits** : `nistitl` / IDEMIA cité dans le README comme œuvre d'origine.
 - **Nom** : pas de reprise du nom `nistitl`.
 
 - **Titulaire du copyright** : ybdn, à titre personnel.
@@ -166,7 +167,7 @@ Les fichiers réels (corpus de la v1, `nist-files/`) contiennent des **données 
 1. Versions de norme à couvrir en 1.0 (1-2011 seule, ou aussi versions antérieures et mises à jour) ?
 2. Profils de validation prioritaires (EBTS, Interpol, national) ?
 3. Format XML (NIEM) : dans la 1.0, plus tard, ou jamais ?
-4. Modèle mémoire : zéro-copie en lecture + modèle possédé pour l'édition, ou modèle possédé unique ?
+4. ~~Modèle mémoire~~ (décidé : modèle possédé unique, octets binaires partagés sans recopie via `Bytes`, voir SPEC §14.6)
 5. ~~Titulaire du copyright~~ (décidé : ybdn, à titre personnel) — compte de publication crates.io à créer / lier au GitHub perso.
 6. Crate WSQ séparée et publique ? (le nom `wsq` est déjà pris sur crates.io par une crate WebSockets)
 7. Langue de la documentation publique (EN recommandé pour l'adoption ; ce PRD reste en FR) ?

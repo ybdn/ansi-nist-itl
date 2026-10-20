@@ -24,10 +24,15 @@ ansi-nist-itl = "0.1"
 
 ## Acknowledgements
 
-The behaviour of this crate is checked against [`nistitl`](https://github.com/idemia/python-nistitl)
-(Python, IDEMIA, CeCILL-C), used as a reference oracle. This crate is an independent
-implementation written from the ANSI/NIST-ITL standard and does not contain code from `nistitl`.
+This crate is a Rust port of [`nistitl`](https://github.com/idemia/python-nistitl)
+(Python, © IDEMIA, CeCILL-C): its parsing and writing behaviour is reproduced from `nistitl`,
+which is also used as the reference oracle for the tests. Many thanks to IDEMIA for publishing it.
 
 ## License
 
-Licensed under the [MIT license](LICENSE).
+Licensed under the [CeCILL-C Free Software License Agreement](LICENSE), version 1.0
+(French version: [`LICENSE-fr`](LICENSE-fr); both versions are equally authentic).
+
+CeCILL-C is a weak copyleft license governed by French law: modifications of this crate must be
+distributed under CeCILL-C, but software that merely depends on it may use any license, including
+a proprietary one. See <https://cecill.info/licences.en.html>.
