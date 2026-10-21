@@ -317,6 +317,11 @@ impl Field {
         &self.subfields
     }
 
+    /// Scalar value, whatever the subfields (`_value`).
+    pub(crate) fn scalar(&self) -> &Scalar {
+        &self.value
+    }
+
     /// Subfield at `index` (`IndexError` if out of range).
     ///
     /// ```

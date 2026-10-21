@@ -72,6 +72,11 @@ pub(crate) fn encode_latin1(s: &str) -> Result<Vec<u8>, EncodeError> {
     encode(s, "latin-1", 0x100)
 }
 
+/// `b.decode('latin-1')`: each byte is the code point of its value.
+pub(crate) fn decode_latin1(b: &[u8]) -> String {
+    b.iter().map(|&c| char::from(c)).collect()
+}
+
 /// `s.encode('ascii')`.
 pub(crate) fn encode_ascii(s: &str) -> Result<Vec<u8>, EncodeError> {
     encode(s, "ascii", 0x80)

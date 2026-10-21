@@ -13,7 +13,7 @@ mod int;
 mod repr;
 mod unicode_tables;
 
-pub(crate) use encode::{EncodeError, encode_ascii, encode_latin1};
+pub(crate) use encode::{EncodeError, decode_latin1, encode_ascii, encode_latin1};
 pub(crate) use format::{BadFormat, PrintfTemplate, pad_int, pad_str, thousands};
 pub(crate) use int::{IntError, py_int};
 pub(crate) use repr::{float_repr, repr_bytes, repr_str};

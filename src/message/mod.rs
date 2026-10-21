@@ -1,5 +1,11 @@
 //! Messages: a Type-1 record followed by the other records (SPEC §10).
 
+mod lexer;
+mod parse;
+
+pub use lexer::{RecordVisitor, parse_record};
+pub use parse::{ParseOptions, Parsed};
+
 use crate::alias;
 use crate::defaults::Defaults;
 use crate::error::{Error, Position, Result};

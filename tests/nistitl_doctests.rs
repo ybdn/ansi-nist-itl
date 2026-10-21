@@ -27,6 +27,120 @@ fn text_value(field: Option<&AnyField>) -> Value {
 }
 
 #[test]
+fn module() {
+    // >>> msg = Message()
+    let mut msg = Message::new();
+    // >>> msg.TOT = 'TOTFORTEST'
+    msg.set_tot("TOTFORTEST").unwrap();
+    // >>> print(msg.TOT)
+    assert_eq!(msg.tot().unwrap().to_string(), "TOTFORTEST");
+    // >>> print(msg.CNT.NIST == b'1.003:1\x1f0')
+    assert_eq!(msg.cnt().unwrap().to_bytes().unwrap(), b"1.003:1\x1f0");
+    // >>> msg.CNT = 12 #doctest: +IGNORE_EXCEPTION_DETAIL
+    // `Message` has no `set_cnt`: see the `compile_fail` example of `Message::cnt`.
+    // >>> r2 = AsciiRecord(2)
+    let mut r2 = AsciiRecord::new(2).unwrap();
+    // >>> r2.IDC = 1
+    r2.set("IDC", 1).unwrap();
+    // >>> msg += r2
+    // `r2` is shared in Python: it is pushed once complete, below.
+    // >>> f12 = Field(2, 12, 'TEST12', alias='f12')
+    let mut f12 = Field::with(2, 12, "TEST12", "FSI", "%d.%03d:", "f12").unwrap();
+    // >>> f12.add_subfields( SubField('TEST12-SF1') )
+    f12.add_subfields([SubField::new("TEST12-SF1", "SI").unwrap()])
+        .unwrap();
+    // >>> f12.add_subfields( SubField('TEST12-SF2') )
+    f12.add_subfields([SubField::new("TEST12-SF2", "SI").unwrap()])
+        .unwrap();
+    // >>> r2 = r2 + f12
+    r2.add_field(f12).unwrap();
+    // >>> print(f12.NIST == b'2.012:TEST12-SF1\x1eTEST12-SF2')
+    let f12 = r2.field("f12").unwrap();
+    assert_eq!(f12.to_bytes().unwrap(), b"2.012:TEST12-SF1\x1eTEST12-SF2");
+    // >>> print(r2.f12)
+    assert_eq!(
+        r2.get("f12").unwrap().repr(),
+        "['TEST12-SF1', 'TEST12-SF2']"
+    );
+    // >>> print(r2['f12']._value)
+    match f12 {
+        AnyField::Text(f) => assert_eq!(f.value().to_string(), "['TEST12-SF1', 'TEST12-SF2']"),
+        AnyField::Binary(_) => unreachable!(),
+    }
+    msg.push(r2).unwrap();
+    let t1 = msg.type1_mut().unwrap();
+    // >>> msg[0].DAT = '20090924'
+    t1.set("DAT", "20090924").unwrap();
+    // >>> msg[0].TCN = '12345'
+    t1.set("TCN", "12345").unwrap();
+    // >>> print(msg.NIST == b'1.001:123…')
+    assert_eq!(
+        msg.to_bytes().unwrap(),
+        b"1.001:123\x1d1.002:0400\x1d1.003:1\x1f1\x1e2\x1f1\x1d1.004:TOTFORTEST\x1d1.005:20090924\x1d1.007:000\x1d1.008:000\x1d1.009:12345\x1d1.011:00.00\x1d1.012:00.00\x1c2.001:45\x1d2.002:1\x1d2.012:TEST12-SF1\x1eTEST12-SF2\x1c"
+    );
+    // >>> r2 = AsciiRecord(2)
+    let mut r2 = AsciiRecord::new(2).unwrap();
+    // >>> r2.IDC = 2
+    r2.set("IDC", 2).unwrap();
+    // >>> msg += r2
+    // >>> f12 = Field(2, 12, 'TEST12', alias='f12')
+    let f12 = Field::with(2, 12, "TEST12", "FSI", "%d.%03d:", "f12").unwrap();
+    // >>> r2 += f12
+    r2.add_field(f12).unwrap();
+    msg.push(r2).unwrap();
+    // >>> s =msg.NIST
+    let s = msg.to_bytes().unwrap();
+    // >>> print(s == b'1.001:127…')
+    assert_eq!(
+        s,
+        b"1.001:127\x1d1.002:0400\x1d1.003:1\x1f2\x1e2\x1f1\x1e2\x1f2\x1d1.004:TOTFORTEST\x1d1.005:20090924\x1d1.007:000\x1d1.008:000\x1d1.009:12345\x1d1.011:00.00\x1d1.012:00.00\x1c2.001:45\x1d2.002:1\x1d2.012:TEST12-SF1\x1eTEST12-SF2\x1c2.001:30\x1d2.002:2\x1d2.012:TEST12\x1c"
+    );
+    // >>> msg = Message()
+    // >>> msg.parse(s)
+    let msg = Message::parse(&s).unwrap();
+    // >>> f12 = msg[(2,'1')][12]
+    let f12 = msg
+        .by_key(2, "1")
+        .unwrap()
+        .as_ascii()
+        .unwrap()
+        .field(12)
+        .unwrap();
+    // >>> print(f12.NIST == b'2.012:TEST12-SF1\x1eTEST12-SF2')
+    assert_eq!(f12.to_bytes().unwrap(), b"2.012:TEST12-SF1\x1eTEST12-SF2");
+    let AnyField::Text(f12) = f12 else {
+        unreachable!()
+    };
+    // >>> print(f12[0].value)
+    assert_eq!(f12.subfield(0).unwrap().value().to_string(), "TEST12-SF1");
+    // >>> print(f12[1].value)
+    assert_eq!(f12.subfield(1).unwrap().value().to_string(), "TEST12-SF2");
+    // >>> f12 = msg[(2,'2')][12]
+    let f12 = msg
+        .by_key(2, "2")
+        .unwrap()
+        .as_ascii()
+        .unwrap()
+        .field(12)
+        .unwrap();
+    // >>> print(f12.NIST == b'2.012:TEST12')
+    assert_eq!(f12.to_bytes().unwrap(), b"2.012:TEST12");
+    let Some(AnyField::Text(cnt)) = msg.type1().unwrap().field("CNT") else {
+        unreachable!()
+    };
+    // >>> print(msg[0]['CNT'][0].values == ['1', '2'])
+    assert_eq!(
+        cnt.subfield(0).unwrap().items(),
+        [Item::from("1"), Item::from("2")]
+    );
+    // >>> print(msg[0]['CNT'][1].values == ['2', '1'])
+    assert_eq!(
+        cnt.subfield(1).unwrap().items(),
+        [Item::from("2"), Item::from("1")]
+    );
+}
+
+#[test]
 fn message_add() {
     // >>> msg = Message()
     let mut msg = Message::new();
@@ -254,6 +368,74 @@ fn message_nist() {
     assert_eq!(
         msg.to_bytes().unwrap(),
         b"1.001:115\x1d1.002:0400\x1d1.003:1\x1f0\x1d1.004:TEST\x1d1.005:20190517\x1d1.007:000\x1d1.008:000\x1d1.009:doctest\x1d1.011:00.00\x1d1.012:00.00\x1c"
+    );
+}
+
+#[test]
+fn message_parse() {
+    // >>> msg = Message()
+    let mut msg = Message::new();
+    // >>> r = AsciiRecord(2)
+    let mut r = AsciiRecord::new(2).unwrap();
+    // >>> r.IDC = 3
+    r.set("IDC", 3).unwrap();
+    // >>> msg = msg + r
+    msg.push(r).unwrap();
+    // >>> msg.TOT = 'TEST'
+    msg.set_tot("TEST").unwrap();
+    let t1 = msg.type1_mut().unwrap();
+    // >>> msg[0].DAT = '20190517'
+    t1.set("DAT", "20190517").unwrap();
+    // >>> msg[0].TCN = 'doctest'
+    t1.set("TCN", "doctest").unwrap();
+    let nist = msg.to_bytes().unwrap();
+    // >>> new_msg = Message()
+    // >>> new_msg.parse( msg.NIST )
+    let new_msg = Message::parse(&nist).unwrap();
+    // >>> len(new_msg)
+    assert_eq!(new_msg.len(), 2);
+    // >>> new_msg = Message()
+    // >>> new_msg.parse( msg.NIST[:-1] )
+    assert_eq!(
+        raises(Message::parse(&nist[..nist.len() - 1])),
+        "NIST_TOO_SHORT: NIST buffer too short (missing bytes) when parsing record 2"
+    );
+    // >>> new_msg = Message()
+    // >>> new_msg.parse( msg.NIST + b'x12345' )
+    assert_eq!(
+        raises(Message::parse(&[&nist[..], b"x12345"].concat())),
+        "BAD_CONTENT: Could not recognize binary record, bad content or bad record"
+    );
+    // >>> msg = Message()
+    let mut msg = Message::new();
+    // >>> msg.TOT = 'TEST'
+    msg.set_tot("TEST").unwrap();
+    let t1 = msg.type1_mut().unwrap();
+    // >>> msg[0].DAT = '20190517'
+    t1.set("DAT", "20190517").unwrap();
+    // >>> msg[0].TCN = 'doctest'
+    t1.set("TCN", "doctest").unwrap();
+    // >>> r = AsciiRecord(14)
+    let mut r = AsciiRecord::new(14).unwrap();
+    // >>> r += Field(14, 3, 'OK')
+    r.add_field(Field::new(14, 3, "OK").unwrap()).unwrap();
+    // >>> r += BinaryField(14, 999, b'data')
+    r.add_field(BinaryField::new(14, 999, b"data").unwrap())
+        .unwrap();
+    // >>> msg = msg + r
+    msg.push(r).unwrap();
+    let nist = msg.to_bytes().unwrap();
+    // >>> new_msg = Message()
+    // >>> new_msg.parse( msg.NIST[:-1])
+    assert_eq!(
+        raises(Message::parse(&nist[..nist.len() - 1])),
+        "NIST_TOO_SHORT: NIST buffer too short (missing bytes) when parsing record 14"
+    );
+    // >>> new_msg = Message()
+    // >>> new_msg.parse( msg.NIST + b'x')
+    assert_eq!(
+        raises(Message::parse(&[&nist[..], b"x"].concat())),
+        "NIST_TOO_LONG: NIST buffer too long (extra bytes)"
     );
 }
 
