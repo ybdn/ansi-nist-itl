@@ -95,32 +95,50 @@ pub trait RecordVisitor {
 /// assert_eq!(count.0, 1);
 /// ```
 pub fn parse_record<V: RecordVisitor + ?Sized>(buffer: &[u8], visitor: &mut V) -> Result<()> {
-    lex(buffer, 0, visitor, &mut ())
+    lex(buffer, 0, &mut Plain(visitor))
 }
 
-/// Receiver of the spans of the fields, for the exact writing (SPEC §13.1).
-pub(crate) trait Spans {
-    /// A field at `start..end` of the input, its label ending at `label_end`.
-    fn field(&mut self, start: usize, label_end: usize, end: usize);
-}
+/// Receiver of the lexer inside the crate: a visitor that also learns where
+/// each field is, and may skip a field without label (tolerant mode).
+pub(crate) trait Lexed: RecordVisitor {
+    /// A field at `start..end` of the input, its label ending at
+    /// `label_end`, about to be visited.
+    fn field_span(&mut self, start: usize, label_end: usize, end: usize) {
+        let _ = (start, label_end, end);
+    }
 
-impl Spans for () {
-    fn field(&mut self, _: usize, _: usize, _: usize) {}
-}
-
-impl Spans for Vec<(usize, usize, usize)> {
-    fn field(&mut self, start: usize, label_end: usize, end: usize) {
-        self.push((start, label_end, end));
+    /// A field without label (`BAD_RECORD`): an error, unless the receiver
+    /// skips the field.
+    fn bad_field(&mut self, error: Error) -> Result<()> {
+        Err(error)
     }
 }
 
+/// A public visitor, with the default behaviour of [`Lexed`].
+struct Plain<'a, V: ?Sized>(&'a mut V);
+
+impl<V: RecordVisitor + ?Sized> RecordVisitor for Plain<'_, V> {
+    fn push_record(&mut self) -> Result<()> {
+        self.0.push_record()
+    }
+
+    fn push_field(&mut self, tag: &str, value: Option<&[u8]>) -> Result<()> {
+        self.0.push_field(tag, value)
+    }
+
+    fn push_subfield(&mut self, value: Option<&[u8]>) -> Result<()> {
+        self.0.push_subfield(value)
+    }
+
+    fn push_value(&mut self, value: &[u8]) -> Result<()> {
+        self.0.push_value(value)
+    }
+}
+
+impl<V: RecordVisitor + ?Sized> Lexed for Plain<'_, V> {}
+
 /// [`parse_record`] on a buffer found at `base` in the input.
-pub(crate) fn lex<V: RecordVisitor + ?Sized>(
-    buffer: &[u8],
-    base: usize,
-    visitor: &mut V,
-    spans: &mut impl Spans,
-) -> Result<()> {
+pub(crate) fn lex<V: Lexed + ?Sized>(buffer: &[u8], base: usize, visitor: &mut V) -> Result<()> {
     let buffer = match buffer.split_last() {
         Some((&FS, rest)) => rest,
         _ => buffer,
@@ -132,14 +150,19 @@ pub(crate) fn lex<V: RecordVisitor + ?Sized>(
         }
         let mut field_start = record_start;
         for field in record.split(|&b| b == GS) {
-            if let Some(label) = match_tag_content(field) {
-                spans.field(field_start, field_start + label, field_start + field.len());
-            }
-            lex_field(field, visitor).map_err(|mut e| {
+            let at = |mut e: Error| {
                 let position = e.position_mut();
                 position.offset = position.offset.or(Some(field_start));
                 e
-            })?;
+            };
+            match match_tag_content(field) {
+                Some(label) => {
+                    let end = field_start + field.len();
+                    visitor.field_span(field_start, field_start + label, end);
+                    lex_field(field, label, visitor).map_err(at)?;
+                }
+                None => visitor.bad_field(at(Error::bad_record()))?,
+            }
             field_start += field.len() + 1;
         }
         visitor.push_record()?;
@@ -148,9 +171,8 @@ pub(crate) fn lex<V: RecordVisitor + ?Sized>(
     Ok(())
 }
 
-fn lex_field<V: RecordVisitor + ?Sized>(field: &[u8], visitor: &mut V) -> Result<()> {
-    let tag_len = match_tag_content(field).ok_or_else(Error::bad_record)?;
-    let (tag, content) = field.split_at(tag_len);
+fn lex_field<V: RecordVisitor + ?Sized>(field: &[u8], label: usize, visitor: &mut V) -> Result<()> {
+    let (tag, content) = field.split_at(label);
     let tag = decode_latin1(tag);
     let subfields: Vec<&[u8]> = content.split(|&b| b == RS).collect();
     let mut last_items = 0;

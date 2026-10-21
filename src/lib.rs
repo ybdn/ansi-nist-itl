@@ -19,7 +19,9 @@ mod value;
 
 pub use bytes::Bytes;
 pub use defaults::Defaults;
-pub use error::{Error, ErrorKind, NistError, Position, Result, Warning};
+pub use error::{
+    Diagnostic, DiagnosticCode, Error, ErrorKind, NistError, Position, Result, Severity, Warning,
+};
 pub use field::{AnyField, BinaryField, Field};
 pub use message::{Message, ParseOptions, Parsed, RecordVisitor, parse_record};
 pub use record::{AsciiRecord, BinaryRecord, FieldKey, Record};

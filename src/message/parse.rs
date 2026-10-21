@@ -1,16 +1,17 @@
-//! Parsing of a message (`Message.parse`, SPEC §10.8–10.10).
+//! Parsing of a message (`Message.parse`, SPEC §10.8–10.10), and its
+//! tolerant mode (SPEC §13.2).
 
-use super::lexer::{lex, match_tag_begin, match_tag_len};
+use super::lexer::{Lexed, lex, match_tag_begin, match_tag_len};
 use super::{Message, RecordVisitor, int_of, int_of_scalar};
 use crate::alias;
 use crate::bytes::Bytes;
-use crate::error::{Error, ErrorKind, Position, Result, Warning};
+use crate::error::{
+    Diagnostic, DiagnosticCode, Error, ErrorKind, Position, Result, Severity, Warning,
+};
 use crate::field::{AnyField, BinaryField, Field};
 use crate::py::{decode_latin1, py_int};
 use crate::record::{AsciiRecord, BinaryRecord, FieldKey, RawField, Record};
 use crate::subfield::SubField;
-#[cfg(test)]
-use crate::value::Value;
 use crate::value::{Item, PyInt, Scalar, SubValue};
 use crate::{FS, GS};
 
@@ -19,18 +20,18 @@ use crate::{FS, GS};
 /// ```
 /// use ansi_nist_itl::{Message, ParseOptions};
 ///
-/// let options = ParseOptions::strict();
-/// assert_eq!(options, ParseOptions::default());
-/// assert!(Message::parse_with(b"", options).is_err());
+/// assert_eq!(ParseOptions::strict(), ParseOptions::default());
+/// assert!(Message::parse_with(b"", ParseOptions::strict()).is_err());
+/// assert!(Message::parse_with(b"", ParseOptions::tolerant()).is_ok());
 /// ```
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ParseOptions {
-    _private: (),
+    tolerant: bool,
 }
 
 impl ParseOptions {
     /// The behaviour of `nistitl`: the first error stops the parsing (the
-    /// default).
+    /// default, LIB-14).
     ///
     /// ```
     /// use ansi_nist_itl::ParseOptions;
@@ -38,7 +39,33 @@ impl ParseOptions {
     /// assert_eq!(ParseOptions::strict(), ParseOptions::default());
     /// ```
     pub fn strict() -> Self {
-        ParseOptions::default()
+        ParseOptions { tolerant: false }
+    }
+
+    /// Reads as much as possible (LIB-13): the parsing always succeeds, and
+    /// each error `nistitl` would raise becomes a [`Diagnostic`] with a
+    /// recovery (SPEC §13.2). The quirks E3 to E5 of `nistitl`, kept as is,
+    /// are reported too.
+    ///
+    /// On a buffer that the strict mode accepts, the message read is the
+    /// same, with warnings only.
+    ///
+    /// ```
+    /// use ansi_nist_itl::{DiagnosticCode, Message, ParseOptions, Severity};
+    ///
+    /// let bytes = Message::new().to_bytes()?;
+    /// let truncated = &bytes[..bytes.len() - 3];
+    /// assert!(Message::parse(truncated).is_err());
+    ///
+    /// let parsed = Message::parse_with(truncated, ParseOptions::tolerant())?;
+    /// let codes: Vec<_> = parsed.diagnostics.iter().map(|d| d.code).collect();
+    /// assert_eq!(codes, [DiagnosticCode::Truncated]);
+    /// assert_eq!(parsed.diagnostics[0].severity, Severity::Error);
+    /// assert_eq!(parsed.message.tot()?.to_string(), "");
+    /// # Ok::<(), ansi_nist_itl::Error>(())
+    /// ```
+    pub fn tolerant() -> Self {
+        ParseOptions { tolerant: true }
     }
 }
 
@@ -51,6 +78,7 @@ impl ParseOptions {
 /// let parsed = Message::parse_with(&bytes, ParseOptions::strict())?;
 /// assert_eq!(parsed.message.len(), 1);
 /// assert!(parsed.warnings.is_empty());
+/// assert!(parsed.diagnostics.is_empty());
 /// # Ok::<(), ansi_nist_itl::Error>(())
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,6 +86,8 @@ impl ParseOptions {
 pub struct Parsed {
     /// The message read.
     pub message: Message,
+    /// Problems met by the tolerant mode; always empty in strict mode.
+    pub diagnostics: Vec<Diagnostic>,
     /// Warnings raised while parsing.
     pub warnings: Vec<Warning>,
 }
@@ -103,7 +133,7 @@ impl Message {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn parse_shared(buffer: impl Into<Bytes>) -> Result<Message> {
-        Parser::run(buffer.into()).map(|(message, _)| message)
+        Parser::run(buffer.into(), false).map(|parsed| parsed.message)
     }
 
     /// [`Message::parse`], also returning the warnings that `nistitl` emits
@@ -120,23 +150,28 @@ impl Message {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn parse_with_warnings(buffer: &[u8]) -> Result<(Message, Vec<Warning>)> {
-        Parser::run(Bytes::from(buffer))
+        Parser::run(Bytes::from(buffer), false).map(|parsed| (parsed.message, parsed.warnings))
     }
 
-    /// [`Message::parse`] with options.
+    /// [`Message::parse`] with options: strict (the default) or tolerant,
+    /// which always succeeds.
     ///
     /// ```
-    /// use ansi_nist_itl::{Message, ParseOptions};
+    /// use ansi_nist_itl::{DiagnosticCode, Message, ParseOptions};
     ///
     /// let bytes = Message::new().to_bytes()?;
     /// let parsed = Message::parse_with(&bytes, ParseOptions::strict())?;
     /// assert_eq!(parsed.message.len(), 1);
+    ///
+    /// let mut odd = bytes.clone();
+    /// odd.extend_from_slice(b"\x00\x00\x00\x05\x01");
+    /// let parsed = Message::parse_with(&odd, ParseOptions::tolerant())?;
+    /// assert_eq!(parsed.diagnostics[0].code, DiagnosticCode::UnknownBinaryRecord);
+    /// assert_eq!(parsed.message.trailing(), b"\x00\x00\x00\x05\x01");
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn parse_with(buffer: &[u8], options: ParseOptions) -> Result<Parsed> {
-        let ParseOptions { _private: () } = options;
-        let (message, warnings) = Parser::run(Bytes::from(buffer))?;
-        Ok(Parsed { message, warnings })
+        Parser::run(Bytes::from(buffer), options.tolerant)
     }
 }
 
@@ -178,22 +213,94 @@ fn digits_text(b: &[u8]) -> String {
     decode_latin1(b)
 }
 
+/// Problems noted in tolerant mode; errors in strict mode.
+#[derive(Default)]
+struct Notes {
+    tolerant: bool,
+    diagnostics: Vec<Diagnostic>,
+}
+
+impl Notes {
+    /// The error `e` stops a strict parsing; a tolerant one notes it and
+    /// goes on.
+    fn recover(&mut self, code: DiagnosticCode, severity: Severity, e: Error) -> Result<()> {
+        if !self.tolerant {
+            return Err(e);
+        }
+        self.diagnostics.push(Diagnostic::new(code, severity, &e));
+        Ok(())
+    }
+
+    /// A quirk of `nistitl`, kept as is, that the tolerant mode reports
+    /// (E3–E5): `nistitl` raises nothing, so the message is the crate's.
+    fn note(&mut self, code: DiagnosticCode, message: String, position: Position) {
+        if self.tolerant {
+            self.diagnostics.push(Diagnostic {
+                code,
+                severity: Severity::Warning,
+                position,
+                message,
+            });
+        }
+    }
+}
+
 /// Visitor of `nistitl` (`_Parser`, SPEC §10.8): fills a tagged record.
 struct TextParser<'a> {
     record: &'a mut AsciiRecord,
     subfields: Vec<SubField>,
     values: Vec<Item>,
     closed: bool,
+    /// `start, label_end, end` of each field, for the exact writing.
+    spans: Vec<(usize, usize, usize)>,
+    notes: &'a mut Notes,
+    /// Index of the record, for the positions.
+    index: usize,
 }
 
 impl<'a> TextParser<'a> {
-    fn new(record: &'a mut AsciiRecord) -> Self {
+    fn new(record: &'a mut AsciiRecord, index: usize, notes: &'a mut Notes) -> Self {
         TextParser {
             record,
             subfields: Vec::new(),
             values: Vec::new(),
             closed: false,
+            spans: Vec::new(),
+            notes,
+            index,
         }
+    }
+
+    /// Position of the current field.
+    fn position(&self, tag: Option<PyInt>) -> Position {
+        Position {
+            record_index: Some(self.index),
+            record_type: Some(self.record.record_type()),
+            tag,
+            offset: self.spans.last().map(|&(start, _, _)| start),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.subfields.clear();
+        self.values.clear();
+    }
+}
+
+impl Lexed for TextParser<'_> {
+    fn field_span(&mut self, start: usize, label_end: usize, end: usize) {
+        self.spans.push((start, label_end, end));
+    }
+
+    fn bad_field(&mut self, error: Error) -> Result<()> {
+        let error = locate(
+            error,
+            Some(self.index),
+            Some(self.record.record_type()),
+            None,
+        );
+        self.notes
+            .recover(DiagnosticCode::BadField, Severity::Error, error)
     }
 }
 
@@ -206,48 +313,82 @@ impl RecordVisitor for TextParser<'_> {
     fn push_field(&mut self, label: &str, value: Option<&[u8]>) -> Result<()> {
         let record_type = self.record.record_type();
         let Some((record, tag)) = match_tag_begin(label) else {
-            return Err(Error::illegal_tag_name(label));
+            let e = Error::illegal_tag_name(label).with_position(self.position(None));
+            self.clear();
+            return self
+                .notes
+                .recover(DiagnosticCode::BadField, Severity::Error, e);
         };
-        let record = py_int(record)?;
-        if to_u32(&record) != Some(record_type) {
-            return Err(Error::illegal_record_number(label).with_position(Position {
-                tag: py_int(tag).ok(),
-                ..Position::default()
-            }));
+        let tag_number = py_int(tag);
+        if py_int(record).ok().as_ref().and_then(to_u32) != Some(record_type) {
+            // `int(record)` may fail on more than 4 300 digits: a record
+            // number that cannot be the one of the record.
+            let e = match py_int(record) {
+                Err(e) if !self.notes.tolerant => Error::from(e),
+                _ => Error::illegal_record_number(label),
+            };
+            let e = e.with_position(self.position(tag_number.as_ref().ok().cloned()));
+            self.notes
+                .recover(DiagnosticCode::TagRecordMismatch, Severity::Warning, e)?;
         }
-        let tag = py_int(tag)?;
-        let position = Position {
-            record_type: Some(record_type),
-            tag: Some(tag.clone()),
-            ..Position::default()
+        let tag = match tag_number {
+            Ok(tag) => tag,
+            Err(e) => {
+                let e = Error::from(e).with_position(self.position(None));
+                self.clear();
+                return self
+                    .notes
+                    .recover(DiagnosticCode::BadField, Severity::Error, e);
+            }
         };
-        let exists = self.record.field(&tag).is_some_and(AnyField::is_truthy);
-        if !exists {
-            self.record
-                .add_field(Field::new(record_type, tag.clone(), "")?)?;
+        let position = self.position(Some(tag.clone()));
+        if !self.record.field(&tag).is_some_and(AnyField::is_truthy) {
+            let field = Field::new(record_type, tag.clone(), "")?;
+            if let Err(e) = self.record.add_field(field) {
+                // A first occurrence with a simple value: BAD_TAG_DUPLICATE.
+                // The tolerant mode reuses it.
+                let e = locate(e, position.record_index, None, position.offset);
+                self.notes
+                    .recover(DiagnosticCode::DuplicateTag, Severity::Warning, e)?;
+            }
         }
         let field = match self.record.field_mut(FieldKey::Tag(tag.clone())) {
             Some(AnyField::Text(f)) => f,
-            _ => return Err(Error::no_attribute("BinaryField", "reset").with_position(position)),
+            _ => {
+                // A binary field of the same tag (not reachable from a
+                // buffer): `reset` does not exist.
+                let e = Error::no_attribute("BinaryField", "reset").with_position(position);
+                self.clear();
+                return self
+                    .notes
+                    .recover(DiagnosticCode::BadField, Severity::Error, e);
+            }
         };
         field.reset();
         match value.filter(|v| !v.is_empty()) {
             Some(value) => {
                 let text = decode_latin1(value);
-                let one = PyInt::from(1);
-                let two = PyInt::from(2);
                 // IDC and LEN are numeric.
-                if (record_type != 1 && tag == two) || tag == one {
-                    let n = py_int(&text).map_err(|e| Error::from(e).with_position(position))?;
-                    field.set_value(n)?;
+                if (record_type != 1 && tag == PyInt::from(2)) || tag == PyInt::from(1) {
+                    match py_int(&text) {
+                        Ok(n) => field.set_value(n)?,
+                        Err(e) => {
+                            let e = Error::from(e).with_position(position);
+                            self.notes.recover(
+                                DiagnosticCode::InvalidNumber,
+                                Severity::Warning,
+                                e,
+                            )?;
+                            field.set_value(text)?;
+                        }
+                    }
                 } else {
                     field.set_value(text)?;
                 }
             }
             None => field.add_subfields(std::mem::take(&mut self.subfields))?,
         }
-        self.subfields.clear();
-        self.values.clear();
+        self.clear();
         Ok(())
     }
 
@@ -271,11 +412,31 @@ impl RecordVisitor for TextParser<'_> {
     }
 }
 
+fn position(index: usize, record_type: u32, offset: usize) -> Position {
+    Position {
+        record_index: Some(index),
+        record_type: Some(record_type),
+        tag: None,
+        offset: Some(offset),
+    }
+}
+
+/// What follows a record.
+enum Step {
+    /// The next record starts after this length.
+    Next(usize),
+    /// The parsing stops.
+    Stop,
+}
+
 /// State of `Message.parse`.
 struct Parser {
     buffer: Bytes,
     records: Vec<Record>,
     warnings: Vec<Warning>,
+    notes: Notes,
+    /// Bytes the tolerant mode could not read.
+    trailing: Bytes,
     /// Number of the last tagged record read (`record` in `nistitl`).
     last_tagged: Option<PyInt>,
     /// Last search of the data label: from where, for which label, and what
@@ -290,11 +451,16 @@ struct Parser {
 }
 
 impl Parser {
-    fn run(buffer: Bytes) -> Result<(Message, Vec<Warning>)> {
+    fn run(buffer: Bytes, tolerant: bool) -> Result<Parsed> {
         let mut parser = Parser {
             buffer,
             records: Vec::new(),
             warnings: Vec::new(),
+            notes: Notes {
+                tolerant,
+                diagnostics: Vec::new(),
+            },
+            trailing: Bytes::new(),
             last_tagged: None,
             data_search: None,
             cnt_chars: None,
@@ -304,7 +470,17 @@ impl Parser {
         parser
             .records
             .push(Record::Ascii(AsciiRecord::with(1, false, true)?));
-        parser.parse()?;
+        if let Err(e) = parser.parse() {
+            if !tolerant {
+                return Err(e);
+            }
+            // Not expected: every error has a recovery. Keep what was read.
+            parser.notes.diagnostics.push(Diagnostic::new(
+                DiagnosticCode::UnknownBinaryRecord,
+                Severity::Fatal,
+                &e,
+            ));
+        }
         let mut records = parser.records;
         for (record, (segments, raw)) in records.iter_mut().zip(parser.origins) {
             match record {
@@ -315,32 +491,61 @@ impl Parser {
         let mut message = Message {
             records,
             layout: None,
+            trailing: parser.trailing,
         };
-        check_cnt(&message)?;
+        if let Err(e) = check_cnt(&message) {
+            let code = if e.kind() == &ErrorKind::MissingField {
+                DiagnosticCode::MissingType1
+            } else {
+                DiagnosticCode::CntMismatch
+            };
+            let severity = if code == DiagnosticCode::MissingType1 {
+                Severity::Error
+            } else {
+                Severity::Warning
+            };
+            parser.notes.recover(code, severity, e)?;
+        }
         message.layout = Some(message.layout_now());
-        Ok((message, parser.warnings))
+        Ok(Parsed {
+            message,
+            diagnostics: parser.notes.diagnostics,
+            warnings: parser.warnings,
+        })
     }
 
     fn parse(&mut self) -> Result<()> {
         let len = self.buffer.len();
         let mut offset = 0usize;
         while offset + 4 < len {
-            let length = match match_tag_len(self.buffer.get(offset..).unwrap_or_default()) {
+            let step = match match_tag_len(self.buffer.get(offset..).unwrap_or_default()) {
                 Some((record, value)) => {
                     let (record, value) = (record.to_vec(), value.to_vec());
                     self.tagged(offset, &record, &value)?
                 }
                 None => self.binary(offset)?,
             };
-            offset += length;
+            match step {
+                Step::Next(length) => offset += length,
+                Step::Stop => return Ok(()),
+            }
         }
         if offset < len {
-            return Err(Error::nist_too_long().with_position(Position {
+            let e = Error::nist_too_long().with_position(Position {
                 offset: Some(offset),
                 ..Position::default()
-            }));
+            });
+            self.notes
+                .recover(DiagnosticCode::TrailingBytes, Severity::Warning, e)?;
+            self.trailing = self.buffer.slice(offset..).unwrap_or_default();
         }
         Ok(())
+    }
+
+    /// Stops the parsing, the bytes from `offset` being trailing.
+    fn stop(&mut self, offset: usize) -> Step {
+        self.trailing = self.buffer.slice(offset..).unwrap_or_default();
+        Step::Stop
     }
 
     /// `_factory(t, autocreate, True)`.
@@ -356,89 +561,174 @@ impl Parser {
         }
     }
 
-    /// A tagged record at `offset`; returns its length.
-    fn tagged(&mut self, offset: usize, record_digits: &[u8], len_digits: &[u8]) -> Result<usize> {
+    /// A tagged record at `offset`.
+    fn tagged(&mut self, offset: usize, record_digits: &[u8], len_digits: &[u8]) -> Result<Step> {
         let len = self.buffer.len();
         let index = self.records.len();
         let at = |e: Error, t: Option<u32>| locate(e, Some(index), t, Some(offset));
-        let record = py_int(&digits_text(record_digits)).map_err(|e| at(e.into(), None))?;
-        let length = py_int(&digits_text(len_digits)).map_err(|e| at(e.into(), to_u32(&record)))?;
+        let record = match py_int(&digits_text(record_digits)) {
+            Ok(record) => record,
+            Err(e) => {
+                let e = at(e.into(), None);
+                self.notes
+                    .recover(DiagnosticCode::UnknownRecordType, Severity::Fatal, e)?;
+                return Ok(self.stop(offset));
+            }
+        };
+        let length = match py_int(&digits_text(len_digits)) {
+            Ok(length) => Some(length),
+            Err(e) => {
+                let e = at(e.into(), to_u32(&record));
+                self.notes
+                    .recover(DiagnosticCode::InvalidNumber, Severity::Warning, e)?;
+                None
+            }
+        };
         self.last_tagged = Some(record.clone());
         let table = to_u32(&record).and_then(alias::table);
-        let (Some(record_type), Some(table)) = (to_u32(&record), table) else {
-            return Err(at(Error::unknown_record_type(record), None));
+        if table.is_none() {
+            let e = at(Error::unknown_record_type(record.clone()), None);
+            let severity = match to_u32(&record) {
+                Some(_) => Severity::Warning,
+                None => Severity::Fatal,
+            };
+            self.notes
+                .recover(DiagnosticCode::UnknownRecordType, severity, e)?;
+        }
+        let Some(record_type) = to_u32(&record) else {
+            return Ok(self.stop(offset));
         };
         let at = |e: Error| locate(e, Some(index), Some(record_type), Some(offset));
-        let data_tag = alias::tag_of(table, alias::DATA);
+        let data_tag = table.and_then(|t| alias::tag_of(t, alias::DATA));
         let data_label = data_tag.map(|t| format!("{t}:").into_bytes());
 
+        // A LEN that is not a number counts as 0: the record extends to its
+        // FS or data label.
+        let length = length.unwrap_or_else(|| PyInt::from(0));
         let mut future = None;
         let length = match to_usize(&length)
             .filter(|&l| offset.checked_add(l).is_some_and(|end| end <= len))
         {
             None => {
-                future = Some(Error::nist_too_short(&record));
+                future = Some((DiagnosticCode::Truncated, Error::nist_too_short(&record)));
                 len - offset
             }
             Some(length) => {
                 let pos_data = data_label.as_ref().and_then(|l| self.find_label(l, offset));
                 let pos_fs = find(&self.buffer, &[FS], offset);
-                let first = [pos_fs, pos_data]
-                    .into_iter()
-                    .flatten()
-                    .min()
-                    .ok_or_else(|| at(Error::empty_sequence()))?;
-                let new_length = first - offset;
-                if new_length > length {
-                    future = Some(Error::nist_too_long());
-                    new_length
-                } else {
-                    length
+                match [pos_fs, pos_data].into_iter().flatten().min() {
+                    None => {
+                        let e = at(Error::empty_sequence());
+                        self.notes
+                            .recover(DiagnosticCode::Unterminated, Severity::Error, e)?;
+                        len - offset
+                    }
+                    Some(first) if first - offset > length => {
+                        future = Some((DiagnosticCode::LenMismatch, Error::nist_too_long()));
+                        // `nistitl` stops before the FS, which then reads as
+                        // extra bytes; the tolerant mode keeps it.
+                        if self.notes.tolerant && Some(first) == pos_fs {
+                            first - offset + 1
+                        } else {
+                            first - offset
+                        }
+                    }
+                    Some(_) => length,
                 }
             }
         };
-        let future = future.map(at);
+        let future = future.map(|(code, e)| (code, at(e)));
         let record_buffer = self
             .buffer
             .slice(offset..offset + length)
             .unwrap_or_default();
         let segment = record_buffer.clone();
-        let pos = data_label.as_ref().and_then(|l| find(&record_buffer, l, 0));
+        let mut pos = data_label
+            .as_ref()
+            .and_then(|l| find(&record_buffer, l, 0))
+            .filter(|&p| p > 0);
 
-        match pos {
-            Some(pos) if pos > 0 => {
-                // Tagged record with binary data: the text part, then the data.
-                let pos_end = record_buffer
-                    .get(..pos)
-                    .and_then(|b| b.iter().rposition(|&c| c == GS));
-                let header_start = pos_end.map_or(0, |p| p + 1);
-                let header =
-                    decode_latin1(record_buffer.get(header_start..pos + 4).unwrap_or_default());
-                if match_tag_begin(&header).is_none() {
+        // Tagged record with binary data: the text part, then the data.
+        let mut data_part = None;
+        if let Some(p) = pos {
+            let pos_end = record_buffer
+                .get(..p)
+                .and_then(|b| b.iter().rposition(|&c| c == GS));
+            let header_start = pos_end.map_or(0, |e| e + 1);
+            let header = decode_latin1(record_buffer.get(header_start..p + 4).unwrap_or_default());
+            match match_tag_begin(&header) {
+                Some((r, t)) => {
+                    if r.len() + t.len() + 2 < header.len() {
+                        self.notes.note(
+                            DiagnosticCode::DataTagInText,
+                            format!("data label found in a text value: {header}"),
+                            position(index, record_type, offset + p),
+                        );
+                    }
+                    data_part = Some((pos_end, header_start));
+                }
+                None => {
                     let tag = data_tag.map_or_else(String::new, |t| t.to_string());
-                    return Err(locate(
+                    let e = locate(
                         Error::illegal_tag_format(tag, header),
                         Some(index),
                         Some(record_type),
                         Some(offset + header_start),
-                    ));
+                    );
+                    self.notes
+                        .recover(DiagnosticCode::BadDataTag, Severity::Error, e)?;
+                    pos = None;
                 }
+            }
+        }
+
+        match (pos, data_part) {
+            (Some(pos), Some((pos_end, header_start))) => {
                 // `record_buffer[:pos_end] + FS`, `pos_end` being -1 if no GS.
                 let text_end = pos_end.unwrap_or(record_buffer.len().saturating_sub(1));
                 let mut text = record_buffer.get(..text_end).unwrap_or_default().to_vec();
                 text.push(FS);
-                let record = self.factory(&PyInt::from(record_type), false).map_err(at)?;
+                let record = self.text_record(record_type, table.is_some()).map_err(at)?;
                 self.push(record, offset)?;
-                self.lex_into(index, &text, offset, future.clone())?;
+                self.lex_into(index, &text, offset, future.as_ref())?;
                 let start = offset + pos + 4;
                 let end = (offset + record_buffer.len()).saturating_sub(1);
                 let data = self.buffer.slice(start..end.max(start)).unwrap_or_default();
+                if record_buffer.last() != Some(&FS) {
+                    self.notes.note(
+                        DiagnosticCode::MissingFinalFs,
+                        "the last byte of the record is not FS, it is dropped".to_owned(),
+                        position(index, record_type, end),
+                    );
+                }
+                let next_label = format!("\u{1d}{record_type}.").into_bytes();
+                if let Some(at_label) = find(&data, &next_label, 0) {
+                    let follows = data.get(at_label + next_label.len()..).unwrap_or_default();
+                    if super::lexer::match_tag_content(
+                        &[format!("{record_type}.").as_bytes(), follows].concat(),
+                    )
+                    .is_some()
+                    {
+                        self.notes.note(
+                            DiagnosticCode::DataNotLast,
+                            "fields follow the data field: they are part of the data".to_owned(),
+                            position(index, record_type, start + at_label),
+                        );
+                    }
+                }
                 let located = |e| locate(e, Some(index), Some(record_type), Some(offset + pos));
                 if let (Some(tag), Some(Record::Ascii(r))) = (data_tag, self.records.get_mut(index))
                 {
                     let field =
                         BinaryField::new(record_type, tag, data.clone()).map_err(located)?;
-                    r.add_field(field).map_err(located)?;
+                    if let Err(e) = r.add_field(field.clone()) {
+                        self.notes.recover(
+                            DiagnosticCode::DuplicateTag,
+                            Severity::Warning,
+                            located(e),
+                        )?;
+                        r.replace_field(field.into()).map_err(located)?;
+                    }
                     let label = self
                         .buffer
                         .slice(offset + header_start..offset + pos + 4)
@@ -454,15 +744,15 @@ impl Parser {
             }
             _ if record_type == 1 => {
                 self.cnt_chars = None;
-                self.lex_into(0, &record_buffer, offset, future.clone())?;
+                self.lex_into(0, &record_buffer, offset, future.as_ref())?;
             }
             _ => {
-                let record = self.factory(&PyInt::from(record_type), false).map_err(at)?;
+                let record = self.text_record(record_type, table.is_some()).map_err(at)?;
                 self.push(record, offset)?;
-                self.lex_into(index, &record_buffer, offset, future.clone())?;
+                self.lex_into(index, &record_buffer, offset, future.as_ref())?;
             }
         }
-        let target = if pos.is_some_and(|p| p > 0) || record_type != 1 {
+        let target = if pos.is_some() || record_type != 1 {
             index
         } else {
             0
@@ -471,8 +761,26 @@ impl Parser {
             segments.push(segment);
         }
         match future {
-            Some(e) => Err(e),
-            None => Ok(length),
+            None => Ok(Step::Next(length)),
+            Some((DiagnosticCode::Truncated, e)) => {
+                self.notes
+                    .recover(DiagnosticCode::Truncated, Severity::Error, e)?;
+                Ok(Step::Next(length))
+            }
+            Some((code, e)) => {
+                self.notes.recover(code, Severity::Warning, e)?;
+                Ok(Step::Next(length))
+            }
+        }
+    }
+
+    /// A new tagged record: `_factory(t, False, True)`, or a record without
+    /// alias table for a type absent from it (tolerant mode).
+    fn text_record(&mut self, record_type: u32, known: bool) -> Result<Record> {
+        if known {
+            self.factory(&PyInt::from(record_type), false)
+        } else {
+            Ok(Record::Ascii(AsciiRecord::untabled(record_type)))
         }
     }
 
@@ -510,30 +818,34 @@ impl Parser {
         index: usize,
         text: &[u8],
         offset: usize,
-        future: Option<Error>,
+        future: Option<&(DiagnosticCode, Error)>,
     ) -> Result<()> {
         let Some(Record::Ascii(record)) = self.records.get_mut(index) else {
             return Err(Error::index_out_of_range());
         };
         let record_type = record.record_type();
-        let mut parser = TextParser::new(record);
-        let mut spans = Vec::new();
-        if let Err(e) = lex(text, offset, &mut parser, &mut spans) {
+        let mut parser = TextParser::new(record, index, &mut self.notes);
+        let lexed = lex(text, offset, &mut parser);
+        let (closed, spans) = (parser.closed, parser.spans);
+        if let Err(e) = lexed {
             let e = locate(e, Some(index), Some(record_type), None);
             return Err(match (future, e.kind()) {
-                (Some(future), ErrorKind::Nist(_)) => future.with_source(e),
+                (Some((_, future)), ErrorKind::Nist(_)) => future.clone().with_source(e),
                 _ => e,
             });
         }
-        if !parser.closed {
-            return Err(future.unwrap_or_else(|| {
-                locate(
-                    Error::record_not_terminated(record_type),
-                    Some(index),
-                    Some(record_type),
-                    Some(offset),
-                )
-            }));
+        if !closed && !self.notes.tolerant {
+            return Err(future.map_or_else(
+                || {
+                    locate(
+                        Error::record_not_terminated(record_type),
+                        Some(index),
+                        Some(record_type),
+                        Some(offset),
+                    )
+                },
+                |(_, future)| future.clone(),
+            ));
         }
         let buffer = &self.buffer;
         let raw = spans.into_iter().filter_map(|(start, label_end, end)| {
@@ -552,8 +864,9 @@ impl Parser {
         Ok(())
     }
 
-    /// A binary record at `offset`; returns its length.
-    fn binary(&mut self, offset: usize) -> Result<usize> {
+    /// A binary record at `offset`.
+    fn binary(&mut self, offset: usize) -> Result<Step> {
+        let len = self.buffer.len();
         let index = self.records.len();
         let at = |e: Error| locate(e, Some(index), None, Some(offset));
         // `struct.unpack("!LB", ...)`: the loop leaves at least 5 bytes.
@@ -563,24 +876,65 @@ impl Parser {
             return Err(at(Error::unrecognized_binary_record()));
         };
         let length = u32::from_be_bytes(length);
-        let length = usize::try_from(length).unwrap_or(usize::MAX);
-        let record_type = self.cnt_record_type(index).map_err(at)?;
-        if offset
-            .checked_add(length)
-            .is_none_or(|end| end > self.buffer.len())
-        {
+        let mut length = usize::try_from(length).unwrap_or(usize::MAX);
+        let record_type = match self.cnt_record_type(index) {
+            Ok(t) => t,
+            Err(e) => {
+                self.notes
+                    .recover(DiagnosticCode::UnknownBinaryRecord, Severity::Fatal, at(e))?;
+                return Ok(self.stop(offset));
+            }
+        };
+        if self.notes.tolerant && length < 5 {
+            self.notes.recover(
+                DiagnosticCode::UnknownBinaryRecord,
+                Severity::Fatal,
+                at(Error::unrecognized_binary_record()),
+            )?;
+            return Ok(self.stop(offset));
+        }
+        let mut truncated = false;
+        if offset.checked_add(length).is_none_or(|end| end > len) {
             let record = self
                 .last_tagged
                 .as_ref()
                 .map_or_else(String::new, PyInt::to_string);
-            return Err(at(Error::nist_too_short(record)));
+            self.notes.recover(
+                DiagnosticCode::Truncated,
+                Severity::Error,
+                at(Error::nist_too_short(record)),
+            )?;
+            length = len - offset;
+            truncated = true;
         }
         let at = |e: Error| locate(e, Some(index), to_u32(&record_type), Some(offset));
-        let mut record = self.factory(&record_type, true).map_err(at)?;
         let value = self
             .buffer
             .slice(offset + 5..offset + length)
             .unwrap_or_default();
+        let record = if self.notes.tolerant {
+            match to_u32(&record_type) {
+                Some(3..=8) => self.factory(&record_type, true).map_err(at)?,
+                Some(t) if t != 1 => {
+                    let e = at(Error::bad_attribute_set("value", t));
+                    self.notes.recover(
+                        DiagnosticCode::UnexpectedBinaryRecord,
+                        Severity::Error,
+                        e,
+                    )?;
+                    Record::Binary(BinaryRecord::new(t))
+                }
+                _ => {
+                    let e = at(Error::unrecognized_binary_record());
+                    self.notes
+                        .recover(DiagnosticCode::UnknownBinaryRecord, Severity::Fatal, e)?;
+                    return Ok(self.stop(offset));
+                }
+            }
+        } else {
+            self.factory(&record_type, true).map_err(at)?
+        };
+        let mut record = record;
         match &mut record {
             Record::Binary(r) => {
                 r.set_idc(idc);
@@ -599,7 +953,10 @@ impl Parser {
         if let Some((segments, _)) = self.origins.last_mut() {
             segments.push(segment);
         }
-        Ok(length)
+        if truncated {
+            return Ok(Step::Stop);
+        }
+        Ok(Step::Next(length))
     }
 
     /// `int(self._records[0].CNT[k][0])`, an `IndexError` being a
@@ -767,6 +1124,7 @@ fn check_cnt(message: &Message) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::value::Value;
     use std::sync::Arc;
 
     fn message_with(records: Vec<Record>) -> Vec<u8> {

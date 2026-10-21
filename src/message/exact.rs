@@ -95,7 +95,9 @@ impl Message {
                 }
             }
             parts.sort_by_key(|&(offset, _)| offset);
-            return Ok(parts.into_iter().flat_map(|(_, bytes)| bytes).collect());
+            let mut out: Vec<u8> = parts.into_iter().flat_map(|(_, bytes)| bytes).collect();
+            out.extend_from_slice(&self.trailing);
+            return Ok(out);
         }
 
         let mut out = Vec::new();
@@ -108,6 +110,7 @@ impl Message {
                 out.extend(record_bytes(i, r)?);
             }
         }
+        out.extend_from_slice(&self.trailing);
         Ok(out)
     }
 }
