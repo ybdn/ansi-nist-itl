@@ -19,6 +19,7 @@ fuzz_target!(|data: &[u8]| {
     for record in message.records() {
         let _ = record.image_info();
     }
+    let _ = message.validate_against(ansi_nist_itl::dictionary::Standard::Update2015);
     let _ = message.summary();
     let _ = message.to_bytes();
 });

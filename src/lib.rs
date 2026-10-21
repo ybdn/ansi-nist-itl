@@ -188,6 +188,8 @@
 //! - `serde`: `Serialize` and `Deserialize` on the model (see above).
 //! - `dictionary`: the `dictionary` module, the fields of
 //!   each record type, after ANSI/NIST-ITL 1-2011 Update 2015.
+//! - `validation` (implies `dictionary`): the `validation` module,
+//!   `Message::validate` against the tables of the standard.
 //!
 //! Image decoding (WSQ, JPEG 2000) is out of scope.
 
@@ -211,6 +213,8 @@ mod record;
 mod serde_impl;
 mod structfmt;
 mod subfield;
+#[cfg(feature = "validation")]
+pub mod validation;
 mod value;
 
 pub use bytes::Bytes;

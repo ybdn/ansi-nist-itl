@@ -36,3 +36,5 @@ local-date = ["dep:chrono"]
 serde = ["dep:serde"]
 # Field dictionary of the standard (SPEC §13.6).
 dictionary = []
+# Validation against the standard (SPEC §13.9).
+validation = ["dictionary"]

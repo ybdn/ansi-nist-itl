@@ -8,6 +8,9 @@ All notable changes to this crate are documented here. The format follows
 
 ### Added
 
+- `validation` feature: `Message::validate` and `validate_against` check a message against the
+  tables of the standard (record types, fields, mandatory fields and items, subfield and item
+  counts, character types, sizes, dates) and the CNT (LIB-16).
 - `encoding` module: the character encoding declared in 1.015 (DCS), and opt-in decoding and
   encoding of text in ASCII, Latin-1 and UTF-8 (`get_decoded`, `set_encoded`); new error kinds
   `Decoding` and `UnsupportedEncoding` (LIB-18).
