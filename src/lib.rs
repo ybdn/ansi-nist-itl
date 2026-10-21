@@ -186,6 +186,8 @@
 //!   as `nistitl` gives it; without it, the UTC date. [`Defaults`] fixes the
 //!   date and the transaction control number.
 //! - `serde`: `Serialize` and `Deserialize` on the model (see above).
+//! - `dictionary`: the `dictionary` module, the fields of
+//!   each record type, after ANSI/NIST-ITL 1-2011 Update 2015.
 //!
 //! Image decoding (WSQ, JPEG 2000) is out of scope.
 
@@ -196,6 +198,8 @@ pub mod alias;
 mod bytes;
 pub mod codes;
 mod defaults;
+#[cfg(feature = "dictionary")]
+pub mod dictionary;
 mod error;
 mod field;
 mod message;

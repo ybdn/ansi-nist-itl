@@ -8,6 +8,9 @@ All notable changes to this crate are documented here. The format follows
 
 ### Added
 
+- `dictionary` feature: the fields of each record type of ANSI/NIST-ITL 1-2011 Update 2015
+  (mnemonic, name, format, condition, cardinality), generated from the layout tables of the
+  standard (LIB-15).
 - `codes` module: impression types (IMP), friction ridge positions (FGP) and compressions of
   ANSI/NIST-ITL 1-2011 Update 2015, with their labels (LIB-21).
 - `serde` feature: `Serialize` and `Deserialize` on `Message`, the records, the fields and the
