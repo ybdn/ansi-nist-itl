@@ -6,6 +6,8 @@ All notable changes to this crate are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-21
+
 ### Changed
 
 - Faster reading and exact writing, same output: `parse` 1.5× (4 KiB) to 5.7× (8 MiB),
@@ -73,5 +75,6 @@ First release: parity with `nistitl` 0.6.
 - Oracle bench against `nistitl` 0.6, fuzz targets, property tests, guard against committing
   real NIST files.
 
-[Unreleased]: https://github.com/ybdn/ansi-nist-itl/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ybdn/ansi-nist-itl/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ybdn/ansi-nist-itl/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ybdn/ansi-nist-itl/releases/tag/v0.1.0
