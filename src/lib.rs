@@ -15,6 +15,7 @@ mod error;
 mod field;
 mod py;
 mod record;
+mod structfmt;
 mod subfield;
 mod value;
 
@@ -22,7 +23,8 @@ pub use bytes::Bytes;
 pub use defaults::Defaults;
 pub use error::{Error, ErrorKind, NistError, Position, Result};
 pub use field::{AnyField, BinaryField, Field};
-pub use record::{AsciiRecord, FieldKey};
+pub use record::{AsciiRecord, BinaryRecord, FieldKey};
+pub use structfmt::StructValue;
 pub use subfield::SubField;
 pub use value::{Item, Kind, ListElem, PyInt, Scalar, SubValue, Value};
 

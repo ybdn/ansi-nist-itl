@@ -13,15 +13,10 @@ mod int;
 mod repr;
 mod unicode_tables;
 
-pub(crate) use encode::{EncodeError, encode_latin1};
+pub(crate) use encode::{EncodeError, encode_ascii, encode_latin1};
 pub(crate) use format::{BadFormat, PrintfTemplate, pad_int, pad_str, thousands};
 pub(crate) use int::{IntError, py_int};
-pub(crate) use repr::{repr_bytes, repr_str};
-
-// Consumed by the `struct` values (SPEC §9.6), which come in a next
-// development step.
-#[allow(unused_imports)]
-pub(crate) use repr::float_repr;
+pub(crate) use repr::{float_repr, repr_bytes, repr_str};
 
 /// `str(bool)`.
 pub(crate) fn bool_str(b: bool) -> &'static str {
