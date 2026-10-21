@@ -467,6 +467,16 @@ impl Error {
         )
     }
 
+    /// `TypeError` of `len(x)` on an object without length.
+    pub(crate) fn no_len(class: &str) -> Self {
+        let kind = if class == "NoneType" {
+            ErrorKind::MissingField
+        } else {
+            ErrorKind::TypeMismatch
+        };
+        Error::new(kind, format!("object of type '{class}' has no len()"))
+    }
+
     /// `IndexError` of `del list[i]`.
     pub(crate) fn assignment_index_out_of_range() -> Self {
         Error::new(
@@ -546,6 +556,35 @@ impl std::error::Error for Error {
             .source
             .as_ref()
             .map(|e| e as &(dyn std::error::Error + 'static))
+    }
+}
+
+/// Warning raised while parsing, where `nistitl` calls `warnings.warn`.
+///
+/// `Display` is the text of the Python warning.
+///
+/// ```
+/// use ansi_nist_itl::Warning;
+///
+/// let w = Warning::Deprecated { record_type: 3 };
+/// assert_eq!(w.to_string(), "Record of type 3");
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum Warning {
+    /// `DeprecationWarning`: a record of type 3, 5 or 6, deprecated by the
+    /// standard.
+    Deprecated {
+        /// Type of the record.
+        record_type: u32,
+    },
+}
+
+impl fmt::Display for Warning {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Warning::Deprecated { record_type } => write!(f, "Record of type {record_type}"),
+        }
     }
 }
 

@@ -8,9 +8,6 @@
 mod alias;
 mod bytes;
 mod defaults;
-// Some error constructors are consumed by the message module, which comes in
-// a next development step.
-#[allow(dead_code)]
 mod error;
 mod field;
 mod message;
@@ -22,9 +19,9 @@ mod value;
 
 pub use bytes::Bytes;
 pub use defaults::Defaults;
-pub use error::{Error, ErrorKind, NistError, Position, Result};
+pub use error::{Error, ErrorKind, NistError, Position, Result, Warning};
 pub use field::{AnyField, BinaryField, Field};
-pub use message::Message;
+pub use message::{Message, ParseOptions, Parsed, RecordVisitor, parse_record};
 pub use record::{AsciiRecord, BinaryRecord, FieldKey, Record};
 pub use structfmt::StructValue;
 pub use subfield::SubField;
