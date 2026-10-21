@@ -8,6 +8,8 @@ All notable changes to this crate are documented here. The format follows
 
 ### Added
 
+- `codes` module: impression types (IMP), friction ridge positions (FGP) and compressions of
+  ANSI/NIST-ITL 1-2011 Update 2015, with their labels (LIB-21).
 - `serde` feature: `Serialize` and `Deserialize` on `Message`, the records, the fields and the
   values, in a stable form; deserialization makes the checks of the API (LIB-23).
 
