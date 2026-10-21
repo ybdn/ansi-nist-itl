@@ -4,8 +4,8 @@
 //! for the error.
 
 use ansi_nist_itl::{
-    AnyField, AsciiRecord, BinaryField, Error, ErrorKind, Field, Item, ListElem, NistError, PyInt,
-    Scalar, SubField, SubValue, Value,
+    AnyField, AsciiRecord, BinaryField, BinaryRecord, Error, ErrorKind, Field, Item, ListElem,
+    NistError, PyInt, Scalar, SubField, SubValue, Value,
 };
 
 /// `str()` of the expected exception.
@@ -126,6 +126,15 @@ fn c81_non_latin1_character() {
 }
 
 #[test]
+fn c82_binary_idc_300() {
+    // `set_idc` takes a `u8`: 300 cannot be built (see the `compile_fail`
+    // example of `BinaryRecord`); 255 is written.
+    let mut r = BinaryRecord::new(4);
+    r.set_idc(255);
+    assert_eq!(r.to_bytes().unwrap(), b"\x00\x00\x00\x05\xff");
+}
+
+#[test]
 fn c83_len_fixed_point() {
     let mut r = AsciiRecord::new(2).unwrap();
     r.set("_3", "x".repeat(80)).unwrap();
@@ -147,6 +156,46 @@ fn c84_string_repr() {
         r.to_string(),
         " 2.001: LEN                           : 0\n 2.002: IDC                           : 0\n 2.003:                               : [[\"a'b\", 'c\"d'], 'x\\ty\\xa0\\xad\\\\']\n 2.007:                               : None"
     );
+}
+
+#[test]
+fn c85_size_with_thousands_separator() {
+    let mut r = BinaryRecord::new(4);
+    r.set_value(vec![b'x'; 1_234_567]);
+    assert_eq!(
+        r.summary().unwrap(),
+        " 4.001: LEN                           : 1234572\n 4.002: IDC                           : 1\n 4.---:                               : <buffer, size=1,234,567>"
+    );
+}
+
+#[test]
+fn c86_default_binary_record() {
+    assert_eq!(
+        BinaryRecord::new(4).summary().unwrap(),
+        " 4.001: LEN                           : 5\n 4.002: IDC                           : 1\n 4.---:                               : <buffer, size=0>"
+    );
+}
+
+#[test]
+fn c87_pack_little_endian() {
+    let mut r = BinaryRecord::new(4);
+    r.pack("<HH", &[1.into(), 2.into()], b"IMG").unwrap();
+    assert_eq!(
+        r.to_bytes().unwrap(),
+        b"\x00\x00\x00\x0c\x01\x01\x00\x02\x00IMG"
+    );
+    assert_eq!(
+        r.summary().unwrap(),
+        " 4.001: LEN                           : 12\n 4.002: IDC                           : 1\n 4.---:                               : <buffer, size=7>\n                                      -> 1\n                                      -> 2"
+    );
+}
+
+#[test]
+fn c88_unpack_too_long() {
+    let mut r = BinaryRecord::new(4);
+    let e = r.unpack("!LLLLLLL").unwrap_err();
+    assert_eq!(e.kind(), &ErrorKind::Struct);
+    assert_eq!(e.to_string(), "unpack requires a buffer of 28 bytes");
 }
 
 // Message (§10.2–10.5).

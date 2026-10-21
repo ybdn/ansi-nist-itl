@@ -4,7 +4,7 @@
 //! are compared as printed by Python.
 
 use ansi_nist_itl::{
-    AnyField, AsciiRecord, BinaryField, Error, Field, Item, SubField, SubValue, Value,
+    AnyField, AsciiRecord, BinaryField, BinaryRecord, Error, Field, Item, SubField, SubValue, Value,
 };
 
 /// `str()` of the error raised by a Python statement expected to fail.
@@ -206,6 +206,70 @@ fn ascii_record_nist() {
     assert_eq!(
         r.to_bytes().unwrap(),
         b"1.001:114\x1d1.002:0400\x1d1.003:\x1d1.004:\x1d1.005:20200904\x1d1.007:000\x1d1.008:000\x1d1.009:TCN\x1d1.011:00.00\x1d1.012:00.00\x1d1.010:TCR\x1c"
+    );
+}
+
+#[test]
+fn binary_record() {
+    // >>> r = BinaryRecord(4)
+    let mut r = BinaryRecord::new(4);
+    // >>> r.IDC = 1
+    r.set_idc(1);
+    // >>> r.value = b'data'
+    r.set_value(b"data");
+    // >>> print(r.NIST)
+    assert_eq!(r.to_bytes().unwrap(), b"\x00\x00\x00\t\x01data");
+    // >>> print(str(r))
+    assert_eq!(
+        r.summary().unwrap(),
+        " 4.001: LEN                           : 9\n 4.002: IDC                           : 1\n 4.---:                               : <buffer, size=4>"
+    );
+}
+
+#[test]
+fn binary_record_pack() {
+    // >>> r = BinaryRecord(4)
+    let mut r = BinaryRecord::new(4);
+    // >>> r.IDC = 1
+    r.set_idc(1);
+    // >>> r.pack("!LHB", 3, 2, 1, b'my image data')
+    r.pack("!LHB", &[3.into(), 2.into(), 1.into()], b"my image data")
+        .unwrap();
+    // >>> print(r.NIST)
+    assert_eq!(
+        r.to_bytes().unwrap(),
+        b"\x00\x00\x00\x19\x01\x00\x00\x00\x03\x00\x02\x01my image data"
+    );
+    // >>> print(str(r))
+    assert_eq!(
+        r.summary().unwrap(),
+        " 4.001: LEN                           : 25\n 4.002: IDC                           : 1\n 4.---:                               : <buffer, size=20>\n                                      -> 3\n                                      -> 2\n                                      -> 1"
+    );
+}
+
+#[test]
+fn binary_record_unpack() {
+    // >>> r = BinaryRecord(4)
+    let mut r = BinaryRecord::new(4);
+    // >>> r.IDC = 1
+    r.set_idc(1);
+    // >>> r.pack("!LHB", 3, 2, 1, b'my image data')
+    r.pack("!LHB", &[3.into(), 2.into(), 1.into()], b"my image data")
+        .unwrap();
+    // >>> r.unpack("!BHL")    # format changed for the test!
+    let (values, rest) = r.unpack("!BHL").unwrap();
+    let printed: Vec<String> = values.iter().map(ToString::to_string).collect();
+    assert_eq!(
+        (printed, &*rest),
+        (
+            vec!["0".to_owned(), "0".into(), "50332161".into()],
+            &b"my image data"[..]
+        )
+    );
+    // >>> print(str(r))
+    assert_eq!(
+        r.summary().unwrap(),
+        " 4.001: LEN                           : 25\n 4.002: IDC                           : 1\n 4.---:                               : <buffer, size=20>\n                                      -> 0\n                                      -> 0\n                                      -> 50332161"
     );
 }
 
