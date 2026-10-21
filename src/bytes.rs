@@ -126,7 +126,11 @@ impl<const N: usize> From<&[u8; N]> for Bytes {
 
 impl PartialEq for Bytes {
     fn eq(&self, other: &Self) -> bool {
-        **self == **other
+        // The same view of the same buffer: no need to compare the bytes.
+        let same = Arc::ptr_eq(&self.buf, &other.buf)
+            && self.start == other.start
+            && self.end == other.end;
+        same || **self == **other
     }
 }
 

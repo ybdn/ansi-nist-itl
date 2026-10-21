@@ -1,5 +1,6 @@
 //! `%` and `str.format` conversions used by `nistitl` (SPEC §3.5).
 
+use std::borrow::Cow;
 use std::fmt;
 
 use super::repr::repr_str;
@@ -47,15 +48,33 @@ pub(crate) fn thousands(n: u64) -> String {
 /// supported (SPEC §3.5, §11).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PrintfTemplate {
-    source: String,
-    parts: Vec<Part>,
+    source: Cow<'static, str>,
+    parts: Cow<'static, [Part]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Part {
-    Literal(String),
+    Literal(Cow<'static, str>),
     Int { zero: bool, width: usize },
 }
+
+/// `'%d.%03d:'`, the default format of a field: given without parsing nor
+/// allocation, as every field read takes it.
+const DEFAULT: PrintfTemplate = PrintfTemplate {
+    source: Cow::Borrowed("%d.%03d:"),
+    parts: Cow::Borrowed(&[
+        Part::Int {
+            zero: false,
+            width: 0,
+        },
+        Part::Literal(Cow::Borrowed(".")),
+        Part::Int {
+            zero: true,
+            width: 3,
+        },
+        Part::Literal(Cow::Borrowed(":")),
+    ]),
+};
 
 /// A template outside the supported subset.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,6 +93,13 @@ impl fmt::Display for BadFormat {
 impl PrintfTemplate {
     /// Parses `template`.
     pub(crate) fn parse(template: &str) -> Result<Self, BadFormat> {
+        if template == DEFAULT.source {
+            return Ok(DEFAULT);
+        }
+        Self::parse_general(template)
+    }
+
+    fn parse_general(template: &str) -> Result<Self, BadFormat> {
         let bad = || BadFormat(template.to_owned());
         let mut parts = Vec::new();
         let mut literal = String::new();
@@ -101,20 +127,20 @@ impl PrintfTemplate {
                 return Err(bad());
             }
             if !literal.is_empty() {
-                parts.push(Part::Literal(std::mem::take(&mut literal)));
+                parts.push(Part::Literal(Cow::Owned(std::mem::take(&mut literal))));
             }
             parts.push(Part::Int { zero, width });
             conversions += 1;
         }
         if !literal.is_empty() {
-            parts.push(Part::Literal(literal));
+            parts.push(Part::Literal(Cow::Owned(literal)));
         }
         if conversions != 2 {
             return Err(bad());
         }
         Ok(PrintfTemplate {
-            source: template.to_owned(),
-            parts,
+            source: Cow::Owned(template.to_owned()),
+            parts: Cow::Owned(parts),
         })
     }
 
@@ -127,7 +153,7 @@ impl PrintfTemplate {
     pub(crate) fn render(&self, a: &PyInt, b: &PyInt) -> String {
         let mut args = [a, b].into_iter();
         let mut out = String::new();
-        for part in &self.parts {
+        for part in self.parts.iter() {
             match part {
                 Part::Literal(s) => out.push_str(s),
                 Part::Int { zero, width } => {
@@ -144,6 +170,12 @@ impl PrintfTemplate {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The constant is what the parsing of its text gives.
+    #[test]
+    fn default_is_parsed() {
+        assert_eq!(PrintfTemplate::parse_general("%d.%03d:"), Ok(DEFAULT));
+    }
 
     fn int(n: i64) -> PyInt {
         PyInt::from(n)
