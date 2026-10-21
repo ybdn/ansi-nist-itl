@@ -927,7 +927,7 @@ mod cpython_vectors {
         let native =
             cfg!(target_endian = "little") && size_of::<c_long>() == 8 && size_of::<usize>() == 8;
         let data = include_str!("../tests/data/struct_vectors.tsv");
-        let mut checked = 0;
+        let (mut standard, mut native_checked) = (0, 0);
         for line in data.lines() {
             let cols: Vec<&str> = line.split('\t').collect();
             let [group, op, format, input, expected] = cols[..] else {
@@ -954,8 +954,18 @@ mod cpython_vectors {
                 }),
             };
             assert_eq!(got, expected, "{op} {format:?} {input}");
-            checked += 1;
+            if group == "std" {
+                standard += 1;
+            } else {
+                native_checked += 1;
+            }
         }
-        assert!(checked > 5000, "only {checked} vectors checked");
+        assert!(standard > 4000, "only {standard} standard vectors checked");
+        if native {
+            assert!(
+                native_checked > 4000,
+                "only {native_checked} native vectors checked"
+            );
+        }
     }
 }
