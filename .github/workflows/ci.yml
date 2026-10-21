@@ -63,6 +63,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --no-deps --all-features
 
+  data:
+    name: Data files (DATA-04)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: tools/check-data-files.sh
+
   fuzz:
     name: Fuzz (parse)
     runs-on: ubuntu-latest
