@@ -39,10 +39,11 @@ fn utf8_through_writing_and_reading() {
         Value::from(NAMES.to_vec())
     );
     // Without decoding, the text stays the Latin-1 view, as in nistitl.
-    assert_eq!(
-        r2.get("_18").unwrap().to_string().chars().count() > utf8.chars().count(),
-        true
-    );
+    let views: Vec<String> = NAMES
+        .iter()
+        .map(|n| n.bytes().map(char::from).collect())
+        .collect();
+    assert_eq!(r2.get("_18").unwrap(), Value::from(views));
 }
 
 #[test]
