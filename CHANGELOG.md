@@ -11,6 +11,8 @@ All notable changes to this crate are documented here. The format follows
 - Tests and documentation of the traditional versions 0200 to 0500: read, rewritten and written
   back exactly, with no rule per version (LIB-19). The synthetic corpus of the oracle bench and
   the fuzz seeds now vary 1.002.
+- `criterion` benchmarks of `parse`, the tolerant mode, `to_bytes`, `to_bytes_exact` and
+  `summary`, on synthetic messages from 4 KiB to 8 MiB; the CI builds them (QA-08).
 
 ## [0.1.0] - 2026-10-21
 
