@@ -184,7 +184,10 @@ proptest! {
         if let Ok(mut read) = Message::parse(&bytes) {
             let json = serde_json::to_string(&read).unwrap();
             let mut back: Message = serde_json::from_str(&json).unwrap();
-            prop_assert_eq!(back.to_bytes().unwrap(), read.to_bytes().unwrap());
+            // `to_bytes` may refuse what `parse` accepts (an IDC lost to an
+            // edit): it must then refuse the copy with the same message.
+            let written = |m: &mut Message| m.to_bytes().map_err(|e| e.to_string());
+            prop_assert_eq!(written(&mut back), written(&mut read));
         }
     }
 
