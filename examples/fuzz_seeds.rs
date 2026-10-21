@@ -59,9 +59,13 @@ fn seeds() -> Result<Vec<Vec<u8>>> {
         &[2, 16, 18, 19, 20, 21, 22, 98],
     ];
     let mut out = Vec::new();
-    for layout in layouts {
+    let versions = ["0200", "0300", "0400", "0500"];
+    for (n, layout) in layouts.iter().enumerate() {
         let mut msg = Message::with_defaults(&defaults());
         msg.set_tot("SEED")?;
+        if let Some(type1) = msg.type1_mut() {
+            type1.set("VER", versions[n % versions.len()])?;
+        }
         for (i, &t) in layout.iter().enumerate() {
             let idc = u8::try_from(i + 1).unwrap_or(u8::MAX);
             if (3..=8).contains(&t) {

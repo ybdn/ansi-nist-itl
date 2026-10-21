@@ -12,6 +12,8 @@ Rust library for reading and writing **ANSI/NIST-ITL** biometric transaction fil
   with typed headers for Types 3–6 and 8.
 - **Same behaviour as [`nistitl`](https://github.com/idemia/python-nistitl) 0.6**: the files it
   accepts or refuses, the bytes it writes, its summaries and its error messages, quirks included.
+- Every version of the standard, the traditional ones (0200 to 0500) included: as in
+  `nistitl`, 1.002 is kept as text and no rule depends on it.
 - **Exact writing**: `to_bytes_exact` gives back the bytes read for everything left unchanged.
 - **Tolerant mode**: reads damaged or truncated files, with located diagnostics.
 - Binary data are shared views on the buffer read, never copied.
