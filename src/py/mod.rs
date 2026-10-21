@@ -7,14 +7,23 @@
 
 #[cfg(test)]
 mod cpython_vectors;
+mod encode;
 mod format;
 mod int;
 mod repr;
 mod unicode_tables;
 
-pub(crate) use format::{BadFormat, PrintfTemplate, pad_int, pad_str, thousands};
-pub(crate) use int::{IntError, MAX_STR_DIGITS, py_int};
-pub(crate) use repr::{float_repr, repr_bytes, repr_str, repr_str_limited};
+pub(crate) use encode::{EncodeError, encode_latin1};
+pub(crate) use format::{BadFormat, PrintfTemplate};
+pub(crate) use int::{IntError, py_int};
+pub(crate) use repr::{repr_bytes, repr_str};
+
+// Consumed by the record summaries (SPEC §8.9, §10.6) and the `struct` values
+// (§9.6), which come in the next development steps.
+#[allow(unused_imports)]
+pub(crate) use format::{pad_str, thousands};
+#[allow(unused_imports)]
+pub(crate) use repr::float_repr;
 
 /// `str(bool)`.
 pub(crate) fn bool_str(b: bool) -> &'static str {

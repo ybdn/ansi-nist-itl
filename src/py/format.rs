@@ -23,12 +23,14 @@ pub(crate) fn pad_int(n: &PyInt, width: usize, zero: bool) -> String {
 /// `'{:<width>}'` for a `str`: left-aligned, padded with spaces, never truncated.
 ///
 /// The width counts characters, not bytes.
+#[allow(dead_code)] // Not used yet, see `py/mod.rs`.
 pub(crate) fn pad_str(s: &str, width: usize) -> String {
     let fill = width.saturating_sub(s.chars().count());
     format!("{s}{}", " ".repeat(fill))
 }
 
 /// `'{:,}'` for a non-negative `int`: thousands separated by commas.
+#[allow(dead_code)] // Not used yet, see `py/mod.rs`.
 pub(crate) fn thousands(n: u64) -> String {
     let digits = n.to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);
