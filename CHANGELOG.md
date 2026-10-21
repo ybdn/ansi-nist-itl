@@ -13,6 +13,12 @@ All notable changes to this crate are documented here. The format follows
   position; a record read shares its fields with what it remembers for the exact writing until
   it changes; the default tag format is a constant.
 
+### Documentation
+
+- `docs/SPEED.md`: speed compared with `nistitl` on the same corpora (3 to 4 times faster on
+  usual messages, equal on large images), with `examples/speed.rs`, `tools/bench/speed.py` and
+  `tools/bench/gen_messages.py` to reproduce it.
+
 ### Added
 
 - Application profiles: `Message::validate_profile` with FBI EBTS 11.2 (tables generated from the
