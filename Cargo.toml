@@ -34,3 +34,5 @@ default = ["local-date"]
 local-date = ["dep:chrono"]
 # Serialize and Deserialize on the model (SPEC §13.4).
 serde = ["dep:serde"]
+# Field dictionary of the standard (SPEC §13.6).
+dictionary = []
