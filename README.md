@@ -67,6 +67,7 @@ The [API documentation](https://docs.rs/ansi-nist-itl) details each type, with r
 |---------|---------|--------|
 | `local-date` | yes | Today's date of a new Type-1 is the local date, as in `nistitl` (UTC without it) |
 | `dictionary` | no | Fields of each record type (mnemonic, name, format, cardinality), after ANSI/NIST-ITL 1-2011 Update 2015 |
+| `validation` | no | `Message::validate`: checks against the tables of the standard (implies `dictionary`) |
 | `serde` | no | `Serialize` / `Deserialize` on the model, in a stable form (binary data in base64 for JSON) |
 
 ## Testing
