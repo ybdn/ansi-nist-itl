@@ -30,6 +30,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-targets
       - run: cargo test --doc
+      - run: cargo test --all-targets --all-features
+      - run: cargo test --doc --all-features
 
   msrv:
     name: MSRV (1.85)

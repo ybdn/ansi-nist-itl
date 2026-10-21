@@ -128,11 +128,64 @@
 //! # Ok::<(), ansi_nist_itl::Error>(())
 //! ```
 //!
+//! # Serialization
+//!
+//! With the `serde` feature, the model implements `Serialize` and
+//! `Deserialize`, in a stable form: values as Python shows them, binary data
+//! in base64 in human-readable formats (raw bytes in the others). Reading
+//! goes through the API, with the same checks and the same messages.
+//!
+//! ```
+//! # #[cfg(feature = "serde")] {
+//! use ansi_nist_itl::{AsciiRecord, Message};
+//! use serde_json::json;
+//!
+//! let mut r2 = AsciiRecord::new(2)?;
+//! r2.set("IDC", 1)?;
+//! r2.set("_18", vec![vec!["DOE", "JOHN"]])?;
+//! assert_eq!(
+//!     serde_json::to_value(&r2).unwrap(),
+//!     json!({ "type": 2, "fields": [
+//!         { "tag": 1, "alias": "LEN", "value": 0 },
+//!         { "tag": 2, "alias": "IDC", "value": 1 },
+//!         { "tag": 18, "value": [["DOE", "JOHN"]] },
+//!     ] })
+//! );
+//!
+//! let json = json!({ "records": [{ "type": 1, "fields": [] }, { "type": 1, "fields": [] }] });
+//! let err = serde_json::from_value::<Message>(json).unwrap_err();
+//! assert_eq!(
+//!     err.to_string(),
+//!     "CANNOT_ADD_TYPE1: Cannot add a type 1 record: it must be the first record"
+//! );
+//! # }
+//! # Ok::<(), ansi_nist_itl::Error>(())
+//! ```
+//!
+//! | Rust | JSON |
+//! |------|------|
+//! | `None`, booleans, text | `null`, `true`/`false`, string |
+//! | [`PyInt`] | number if it fits in `i64`, else `{"int": "-123…"}` |
+//! | lists ([`Value`], [`ListElem`], [`Item`]) | nested arrays |
+//! | [`Kind`] | `"FSI"`, `"SI"`… |
+//! | [`Bytes`] | base64 (RFC 4648, padded) |
+//! | text field | `{"tag", "alias"?, "kind"?, "format"?, "value"}` |
+//! | binary field | `{"tag", "alias"?, "format"?, "bytes"}` |
+//! | tagged record | `{"type", "autosort"?, "fields"}` |
+//! | binary record | `{"type", "idc", "format"?, "bytes"}` |
+//! | message | `{"records"}`, the Type-1 first |
+//!
+//! Optional keys are left out at their default: no alias, kind `FSI` (`SI`
+//! for a lone [`SubField`]), format `%d.%03d:`, `autosort` true. A lone
+//! field also carries its `record`. Unknown keys are refused. The bytes
+//! read for [`Message::to_bytes_exact`] are not serialized.
+//!
 //! # Features
 //!
 //! - `local-date` (default): today's date of a new Type-1 is the local date,
 //!   as `nistitl` gives it; without it, the UTC date. [`Defaults`] fixes the
 //!   date and the transaction control number.
+//! - `serde`: `Serialize` and `Deserialize` on the model (see above).
 //!
 //! Image decoding (WSQ, JPEG 2000) is out of scope.
 
@@ -147,6 +200,8 @@ mod field;
 mod message;
 mod py;
 mod record;
+#[cfg(feature = "serde")]
+mod serde_impl;
 mod structfmt;
 mod subfield;
 mod value;

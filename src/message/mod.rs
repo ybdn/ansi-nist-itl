@@ -161,6 +161,16 @@ impl Message {
         self.trailing = Bytes::new();
     }
 
+    /// A message made of `type1` alone.
+    #[cfg(feature = "serde")]
+    pub(crate) fn from_type1(type1: AsciiRecord) -> Self {
+        Message {
+            records: vec![Record::Ascii(type1)],
+            layout: None,
+            trailing: Bytes::new(),
+        }
+    }
+
     /// Adds a record at the end (`msg += record`). A Type-1 gives
     /// `CANNOT_ADD_TYPE1`; IDCs are not checked.
     ///

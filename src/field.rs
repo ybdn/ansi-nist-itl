@@ -8,7 +8,7 @@ use crate::subfield::SubField;
 use crate::value::{Kind, ListElem, PyInt, Scalar, SubValue, Value};
 
 /// Default tag format of `nistitl`: `'%d.%03d:'`.
-const DEFAULT_FORMAT: &str = "%d.%03d:";
+pub(crate) const DEFAULT_FORMAT: &str = "%d.%03d:";
 
 /// `int(tag)`: the tag given as a number or as text.
 fn tag_number(tag: Scalar, record: u32) -> Result<PyInt> {

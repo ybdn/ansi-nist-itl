@@ -156,3 +156,51 @@ proptest! {
         }
     }
 }
+
+#[cfg(feature = "serde")]
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    /// JSON, then back: the same message, the same bytes (SPEC §13.4).
+    #[test]
+    fn json_round_trip(mut msg in message()) {
+        let json = serde_json::to_string(&msg).unwrap();
+        let mut back: Message = serde_json::from_str(&json).unwrap();
+        prop_assert!(back == msg);
+        prop_assert_eq!(back.to_bytes().unwrap(), msg.to_bytes().unwrap());
+    }
+
+    /// Every message that `parse` accepts goes through JSON and back.
+    #[test]
+    fn json_round_trip_of_parsed_bytes(
+        mut msg in message(),
+        edits in vec((any::<prop::sample::Index>(), any::<u8>()), 0..3),
+    ) {
+        let mut bytes = msg.to_bytes().unwrap();
+        for (at, byte) in edits {
+            let i = at.index(bytes.len());
+            bytes[i] = byte;
+        }
+        if let Ok(mut read) = Message::parse(&bytes) {
+            let json = serde_json::to_string(&read).unwrap();
+            let mut back: Message = serde_json::from_str(&json).unwrap();
+            prop_assert_eq!(back.to_bytes().unwrap(), read.to_bytes().unwrap());
+        }
+    }
+
+    /// Altered JSON: an error or a message, never a panic.
+    #[test]
+    fn altered_json(
+        msg in message(),
+        edits in vec((any::<prop::sample::Index>(), any::<u8>()), 1..4),
+    ) {
+        let mut json = serde_json::to_vec(&msg).unwrap();
+        for (at, byte) in edits {
+            let i = at.index(json.len());
+            json[i] = byte;
+        }
+        if let Ok(mut back) = serde_json::from_slice::<Message>(&json) {
+            let _ = back.to_bytes();
+        }
+    }
+}

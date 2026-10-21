@@ -8,6 +8,9 @@ All notable changes to this crate are documented here. The format follows
 
 ### Added
 
+- `serde` feature: `Serialize` and `Deserialize` on `Message`, the records, the fields and the
+  values, in a stable form; deserialization makes the checks of the API (LIB-23).
+
 - Tests and documentation of the traditional versions 0200 to 0500: read, rewritten and written
   back exactly, with no rule per version (LIB-19). The synthetic corpus of the oracle bench and
   the fuzz seeds now vary 1.002.

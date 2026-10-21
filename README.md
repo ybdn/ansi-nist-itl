@@ -17,7 +17,8 @@ Rust library for reading and writing **ANSI/NIST-ITL** biometric transaction fil
 - **Exact writing**: `to_bytes_exact` gives back the bytes read for everything left unchanged.
 - **Tolerant mode**: reads damaged or truncated files, with located diagnostics.
 - Binary data are shared views on the buffer read, never copied.
-- Never panics on its input (fuzzed); no `unsafe`; one optional dependency (`chrono`).
+- Never panics on its input (fuzzed); no `unsafe`; two optional dependencies (`chrono`, `serde`).
+- Optional `serde` support, with the checks of the API when deserializing.
 - No UI, no I/O assumptions: works on `&[u8]`, with `from_reader` / `from_path` helpers.
 
 Image decoding (WSQ, JPEG 2000) is out of scope for this crate.
@@ -61,6 +62,7 @@ The [API documentation](https://docs.rs/ansi-nist-itl) details each type, with r
 | Feature | Default | Effect |
 |---------|---------|--------|
 | `local-date` | yes | Today's date of a new Type-1 is the local date, as in `nistitl` (UTC without it) |
+| `serde` | no | `Serialize` / `Deserialize` on the model, in a stable form (binary data in base64 for JSON) |
 
 ## Testing
 

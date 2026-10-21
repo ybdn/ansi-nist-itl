@@ -351,6 +351,16 @@ impl BinaryRecord {
         }
     }
 
+    /// Keeps `format` for the summary, as a successful
+    /// [`unpack`](BinaryRecord::unpack) would; it must be a valid `struct`
+    /// format.
+    #[cfg(feature = "serde")]
+    pub(crate) fn set_format(&mut self, format: &str) -> Result<()> {
+        structfmt::calcsize(format).map_err(|e| self.locate(e))?;
+        self.format = format.to_owned();
+        Ok(())
+    }
+
     fn locate(&self, e: Error) -> Error {
         e.with_position(self.position())
     }
