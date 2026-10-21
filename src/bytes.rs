@@ -113,6 +113,12 @@ impl From<&[u8]> for Bytes {
     }
 }
 
+impl<const N: usize> From<&[u8; N]> for Bytes {
+    fn from(s: &[u8; N]) -> Self {
+        Bytes::from(&s[..])
+    }
+}
+
 impl PartialEq for Bytes {
     fn eq(&self, other: &Self) -> bool {
         **self == **other
