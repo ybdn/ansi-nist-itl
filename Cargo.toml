@@ -9,6 +9,7 @@ repository = "https://github.com/ybdn/ansi-nist-itl"
 readme = "README.md"
 keywords = ["nist", "biometrics", "fingerprint", "ansi-nist-itl", "parser"]
 categories = ["parser-implementations", "encoding"]
+exclude = ["/fuzz", "/tools", "/docs", "/.github"]
 
 [dependencies]
 chrono = { version = "0.4.38", default-features = false, features = ["clock"], optional = true }

@@ -62,3 +62,30 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --no-deps --all-features
+
+  fuzz:
+    name: Fuzz (parse)
+    runs-on: ubuntu-latest
+    env:
+      # cargo-fuzz sets its own flags; warnings of libFuzzer must not fail it.
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            fuzz
+      - name: Synthetic seed corpus
+        run: cargo run --example fuzz_seeds -- fuzz/corpus/parse
+      - name: Fuzz for two minutes
+        run: cargo fuzz run parse -- -max_total_time=120 -max_len=8192
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts
