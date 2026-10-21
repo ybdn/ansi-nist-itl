@@ -78,6 +78,25 @@
 //! also carries a [`Position`]: record, tag, byte offset. The crate never
 //! panics on its input, which is fuzzed.
 //!
+//! # Versions
+//!
+//! As `nistitl`, the crate never reads the version of the standard (1.002,
+//! kept as text): every version is read and written the same way, the
+//! traditional ones (0200 to 0500) as the later ones. No rule depends on the
+//! version: a record type is accepted whatever the version declares, and
+//! Types 3, 5 and 6 give a [`Warning::Deprecated`] in every version.
+//!
+//! ```
+//! use ansi_nist_itl::{Message, Value};
+//!
+//! let mut msg = Message::new();
+//! msg.type1_mut().unwrap().set("VER", "0200")?;
+//! let bytes = msg.to_bytes()?;
+//! let read = Message::parse(&bytes)?;
+//! assert_eq!(read.type1().unwrap().get("VER")?, Value::from("0200"));
+//! # Ok::<(), ansi_nist_itl::Error>(())
+//! ```
+//!
 //! # Exact writing
 //!
 //! `nistitl` sorts fields, writes labels on 3 digits and recomputes LEN and
