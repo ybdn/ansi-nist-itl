@@ -1,5 +1,6 @@
 //! Messages: a Type-1 record followed by the other records (SPEC §10).
 
+mod io;
 mod lexer;
 mod parse;
 

@@ -5,7 +5,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-mod alias;
+pub mod alias;
 mod bytes;
 mod defaults;
 mod error;

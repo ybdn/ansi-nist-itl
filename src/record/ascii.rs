@@ -602,6 +602,39 @@ impl AsciiRecord {
         }
     }
 
+    /// IDC of the record: [`get`](AsciiRecord::get) of
+    /// [`alias::IDC`](crate::alias::IDC), with the same errors.
+    ///
+    /// ```
+    /// use ansi_nist_itl::{AsciiRecord, Value};
+    ///
+    /// let mut r = AsciiRecord::new(2)?;
+    /// r.set("IDC", "07")?;
+    /// assert_eq!(r.idc()?, Value::from("07"));
+    /// assert!(AsciiRecord::new(1)?.idc().is_err());
+    /// # Ok::<(), ansi_nist_itl::Error>(())
+    /// ```
+    pub fn idc(&self) -> Result<Value> {
+        self.get(alias::IDC)
+    }
+
+    /// LEN of the record: [`get`](AsciiRecord::get) of
+    /// [`alias::LEN`](crate::alias::LEN), with the same errors. It is updated
+    /// by [`to_bytes`](AsciiRecord::to_bytes).
+    ///
+    /// ```
+    /// use ansi_nist_itl::{AsciiRecord, Value};
+    ///
+    /// let mut r = AsciiRecord::new(2)?;
+    /// assert_eq!(r.len_field()?, Value::from(0));
+    /// r.to_bytes()?;
+    /// assert_eq!(r.len_field()?, Value::from(17));
+    /// # Ok::<(), ansi_nist_itl::Error>(())
+    /// ```
+    pub fn len_field(&self) -> Result<Value> {
+        self.get(alias::LEN)
+    }
+
     fn lookup(&self, name: &str) -> Result<&AnyField> {
         let by_alias = self.fields.iter().find(|f| f.alias() == name);
         let by_tag = || {

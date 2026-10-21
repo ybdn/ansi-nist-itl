@@ -1,21 +1,31 @@
-//! Alias table of `nistitl` (`ALIASES`, SPEC §4.5, annex A).
+//! Aliases of the fields, as `nistitl` 0.6 defines them (`ALIASES`, SPEC
+//! §4.5, annex A, LIB-07).
 //!
-//! For each covered record type (1, 2, 9–22, 98, 99), an ordered list of
-//! `(tag, alias)`. A type absent from the table is an unknown type: `nistitl`
-//! raises `KeyError`, the crate [`ErrorKind::UnknownRecordType`](crate::ErrorKind::UnknownRecordType).
+//! A field added to a record without alias takes the alias of its tag in
+//! the table of the record type. One constant is defined per distinct
+//! alias, for [`AsciiRecord::get`](crate::AsciiRecord::get),
+//! [`AsciiRecord::set`](crate::AsciiRecord::set) and
+//! [`AsciiRecord::field`](crate::AsciiRecord::field).
+//!
+//! ```
+//! use ansi_nist_itl::{AsciiRecord, Value, alias};
+//!
+//! let mut r = AsciiRecord::new(10)?;
+//! r.set(alias::SRC, "agency")?;
+//! r.set_bytes(alias::DATA, b"image")?;
+//! assert_eq!(r.get(alias::SRC)?, Value::from("agency"));
+//! assert_eq!(r.field(alias::DATA).unwrap().tag().to_string(), "999");
+//! # Ok::<(), ansi_nist_itl::Error>(())
+//! ```
+//!
+//! A record type absent from the table is unknown: `nistitl` raises
+//! `KeyError`, the crate [`ErrorKind::UnknownRecordType`](crate::ErrorKind::UnknownRecordType).
 
+mod names;
 mod table;
 
+pub use names::*;
 pub(crate) use table::ALIASES;
-
-/// Alias of the binary data field, always at tag 999.
-pub(crate) const DATA: &str = "DATA";
-/// Alias of the image designation character, tag 2 (except Type-1).
-pub(crate) const IDC: &str = "IDC";
-/// Alias of the content field of the Type-1, tag 3.
-pub(crate) const CNT: &str = "CNT";
-/// Alias of the type of transaction of the Type-1, tag 4.
-pub(crate) const TOT: &str = "TOT";
 
 /// `ALIASES[record_type]`: the `(tag, alias)` pairs of a type, in table order.
 pub(crate) fn table(record_type: u32) -> Option<&'static [(u32, &'static str)]> {
@@ -97,6 +107,20 @@ mod tests {
                 assert_eq!(tag, 999);
             }
         }
+    }
+
+    #[test]
+    fn one_constant_per_alias() {
+        let mut aliases: Vec<&str> = ALIASES
+            .iter()
+            .flat_map(|&(_, t)| t.iter().map(|&(_, a)| a))
+            .collect();
+        aliases.sort_unstable();
+        aliases.dedup();
+        let mut names = names::NAMES.to_vec();
+        names.sort_unstable();
+        assert_eq!(names, aliases);
+        assert_eq!(THREE_DF, "3DF");
     }
 
     #[test]
