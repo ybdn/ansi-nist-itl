@@ -15,6 +15,9 @@ fuzz_target!(|data: &[u8]| {
         let _ = record.image_info();
     }
     let _ = msg.validate_against(ansi_nist_itl::dictionary::Standard::Update2015);
+    for profile in [ansi_nist_itl::validation::Profile::Ebts112, ansi_nist_itl::validation::Profile::IntI503] {
+        let _ = msg.validate_profile(profile);
+    }
     if let Ok(bytes) = msg.to_bytes() {
         let _ = Message::parse(&bytes);
     }

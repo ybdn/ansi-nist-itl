@@ -189,7 +189,8 @@
 //! - `dictionary`: the `dictionary` module, the fields of
 //!   each record type, after ANSI/NIST-ITL 1-2011 Update 2015.
 //! - `validation` (implies `dictionary`): the `validation` module,
-//!   `Message::validate` against the tables of the standard.
+//!   `Message::validate` against the tables of the standard, and
+//!   `Message::validate_profile` against FBI EBTS 11.2 or INTERPOL INT-I 5.03.
 //!
 //! Image decoding (WSQ, JPEG 2000) is out of scope.
 

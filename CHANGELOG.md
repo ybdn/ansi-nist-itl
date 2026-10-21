@@ -8,6 +8,8 @@ All notable changes to this crate are documented here. The format follows
 
 ### Added
 
+- Application profiles: `Message::validate_profile` with FBI EBTS 11.2 (tables generated from the
+  specification) and INTERPOL INT-I 5.03 (LIB-17).
 - `validation` feature: `Message::validate` and `validate_against` check a message against the
   tables of the standard (record types, fields, mandatory fields and items, subfield and item
   counts, character types, sizes, dates) and the CNT (LIB-16).
