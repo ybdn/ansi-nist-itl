@@ -8,6 +8,9 @@ All notable changes to this crate are documented here. The format follows
 
 ### Added
 
+- `encoding` module: the character encoding declared in 1.015 (DCS), and opt-in decoding and
+  encoding of text in ASCII, Latin-1 and UTF-8 (`get_decoded`, `set_encoded`); new error kinds
+  `Decoding` and `UnsupportedEncoding` (LIB-18).
 - `image` module and `image_info()` on records: dimensions, resolution, compression, bits per
   pixel, impression type and positions of image records, tagged or binary, without decoding
   (LIB-20).
