@@ -10,6 +10,12 @@ pub(crate) use table::ALIASES;
 
 /// Alias of the binary data field, always at tag 999.
 pub(crate) const DATA: &str = "DATA";
+/// Alias of the image designation character, tag 2 (except Type-1).
+pub(crate) const IDC: &str = "IDC";
+/// Alias of the content field of the Type-1, tag 3.
+pub(crate) const CNT: &str = "CNT";
+/// Alias of the type of transaction of the Type-1, tag 4.
+pub(crate) const TOT: &str = "TOT";
 
 /// `ALIASES[record_type]`: the `(tag, alias)` pairs of a type, in table order.
 pub(crate) fn table(record_type: u32) -> Option<&'static [(u32, &'static str)]> {

@@ -5,7 +5,7 @@
 
 use ansi_nist_itl::{
     AnyField, AsciiRecord, BinaryField, BinaryRecord, Error, ErrorKind, Field, Item, ListElem,
-    NistError, PyInt, Scalar, SubField, SubValue, Value,
+    Message, NistError, PyInt, Scalar, SubField, SubValue, Value,
 };
 
 /// `str()` of the expected exception.
@@ -54,6 +54,18 @@ fn c70_binary_fields_last_in_insertion_order() {
     assert_eq!(
         r.to_bytes().unwrap(),
         b"2.001:41\x1d2.002:0\x1d2.005:z\x1d2.999:B\x1d2.998:A\x1c"
+    );
+}
+
+#[test]
+fn c71_text_idc_in_cnt() {
+    let mut msg = Message::new();
+    let mut r = AsciiRecord::new(2).unwrap();
+    r.set("IDC", "07").unwrap();
+    msg.push(r).unwrap();
+    assert_eq!(
+        msg.cnt().unwrap().to_bytes().unwrap(),
+        b"1.003:1\x1f1\x1e2\x1f07"
     );
 }
 
@@ -199,6 +211,72 @@ fn c88_unpack_too_long() {
 }
 
 // Message (§10.2–10.5).
+
+#[test]
+fn c89_type1_by_key() {
+    let msg = Message::new();
+    assert_eq!(
+        raises(msg.by_key(1, 0)),
+        "UNKNOWN_ATTRIBUTE: Unkown or bad attribute <IDC> while trying to retrieve a field in record of type 1"
+    );
+}
+
+#[test]
+fn c90_delete_missing_key() {
+    let mut msg = Message::new();
+    msg.push(AsciiRecord::new(2).unwrap()).unwrap();
+    let e = msg.remove_by_key(2, 9).unwrap_err();
+    assert_eq!(e.kind(), &ErrorKind::TypeMismatch);
+    assert_eq!(
+        e.to_string(),
+        "list indices must be integers or slices, not tuple"
+    );
+}
+
+#[test]
+fn c91_type1_cannot_be_deleted() {
+    // `del msg[-2]` has no equivalent: indices are `usize`. Both ways to
+    // reach the Type-1 are refused.
+    let mut msg = Message::new();
+    msg.push(AsciiRecord::new(2).unwrap()).unwrap();
+    let type1 = msg.record(0).unwrap().clone();
+    for e in [
+        msg.remove(0).unwrap_err(),
+        msg.remove_record(&type1).unwrap_err(),
+    ] {
+        assert_eq!(e.nist_error(), Some(NistError::CannotDeleteType1));
+    }
+    assert_eq!(msg.len(), 2);
+}
+
+#[test]
+fn c92_same_record_twice() {
+    let mut msg = Message::new();
+    let r = AsciiRecord::new(2).unwrap();
+    msg.push(r.clone()).unwrap();
+    msg.push(r).unwrap();
+    assert_eq!(msg.len(), 3);
+}
+
+#[test]
+fn c93_same_idc_twice() {
+    let mut msg = Message::new();
+    msg.push(AsciiRecord::new(2).unwrap()).unwrap();
+    msg.push(AsciiRecord::new(2).unwrap()).unwrap();
+    assert_eq!(msg.len(), 3);
+}
+
+#[test]
+fn c94_default_tot() {
+    assert_eq!(Message::new().tot().unwrap(), Value::from(""));
+}
+
+#[test]
+fn c95_default_tcn_length() {
+    let msg = Message::new();
+    let tcn = msg.type1().unwrap().get("TCN").unwrap();
+    assert_eq!(tcn.to_string().len(), 32);
+}
 
 #[test]
 fn c96_unknown_record_type() {

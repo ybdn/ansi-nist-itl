@@ -4,7 +4,8 @@
 //! are compared as printed by Python.
 
 use ansi_nist_itl::{
-    AnyField, AsciiRecord, BinaryField, BinaryRecord, Error, Field, Item, SubField, SubValue, Value,
+    AnyField, AsciiRecord, BinaryField, BinaryRecord, Error, Field, Item, Message, Record,
+    SubField, SubValue, Value,
 };
 
 /// `str()` of the error raised by a Python statement expected to fail.
@@ -23,6 +24,237 @@ fn text_value(field: Option<&AnyField>) -> Value {
         Some(AnyField::Text(f)) => f.value(),
         other => panic!("not a text field: {other:?}"),
     }
+}
+
+#[test]
+fn message_add() {
+    // >>> msg = Message()
+    let mut msg = Message::new();
+    // >>> r = AsciiRecord(2)
+    let r = AsciiRecord::new(2).unwrap();
+    // >>> msg = msg + r
+    msg.push(r).unwrap();
+    // >>> len(msg._records)
+    assert_eq!(msg.records().len(), 2);
+}
+
+#[test]
+fn message_iadd() {
+    // >>> msg = Message()
+    let mut msg = Message::new();
+    // >>> r = AsciiRecord(2)
+    let r = AsciiRecord::new(2).unwrap();
+    // >>> msg += r
+    msg.push(r).unwrap();
+    // >>> len(msg._records)
+    assert_eq!(msg.records().len(), 2);
+}
+
+#[test]
+fn message_iter() {
+    // >>> msg = Message()
+    let mut msg = Message::new();
+    // >>> r = AsciiRecord(2)
+    // >>> msg = msg + r
+    msg.push(AsciiRecord::new(2).unwrap()).unwrap();
+    // >>> for record in msg:
+    // ...     print(record.type)
+    let types: Vec<u32> = msg.records().iter().map(Record::record_type).collect();
+    assert_eq!(types, [1, 2]);
+}
+
+#[test]
+fn message_iter_type() {
+    // >>> msg = Message()
+    let mut msg = Message::new();
+    // >>> r = AsciiRecord(2)
+    // >>> msg = msg + r
+    msg.push(AsciiRecord::new(2).unwrap()).unwrap();
+    // >>> for record in msg.iter(2):
+    // ...     print(record.type)
+    let types: Vec<u32> = msg.records_of(2).map(Record::record_type).collect();
+    assert_eq!(types, [2]);
+}
+
+#[test]
+fn message_getitem() {
+    // >>> msg = Message()
+    let mut msg = Message::new();
+    // >>> r = AsciiRecord(2)
+    // >>> msg = msg + r
+    msg.push(AsciiRecord::new(2).unwrap()).unwrap();
+    // >>> print(msg[1].type)
+    assert_eq!(msg.record(1).unwrap().record_type(), 2);
+    // >>> print(msg[(2, 0)].type)
+    assert_eq!(msg.by_key(2, 0).unwrap().record_type(), 2);
+    // >>> print(msg[0].type)
+    assert_eq!(msg.record(0).unwrap().record_type(), 1);
+    // >>> msg[100]
+    assert_eq!(raises(msg.record(100)), "list index out of range");
+    // >>> msg[(2, 100)]
+    assert_eq!(raises(msg.by_key(2, 100)), "list index out of range");
+}
+
+#[test]
+fn message_len() {
+    // >>> msg = Message()
+    let msg = Message::new();
+    // >>> print(len(msg))
+    assert_eq!(msg.len(), 1);
+}
+
+#[test]
+fn message_delitem() {
+    // >>> msg = Message()
+    let mut msg = Message::new();
+    // >>> r = AsciiRecord(2)
+    let r = AsciiRecord::new(2).unwrap();
+    // >>> msg = msg + r
+    msg.push(r.clone()).unwrap();
+    // >>> del msg[1]
+    msg.remove(1).unwrap();
+    // >>> len(msg)
+    assert_eq!(msg.len(), 1);
+    // >>> msg = msg + r
+    msg.push(r.clone()).unwrap();
+    // >>> del msg[(2, 0)]
+    msg.remove_by_key(2, 0).unwrap();
+    // >>> len(msg)
+    assert_eq!(msg.len(), 1);
+    // >>> msg = msg + r
+    msg.push(r).unwrap();
+    // >>> del msg[(1, 0)]
+    assert_eq!(
+        raises(msg.remove_by_key(1, 0)),
+        "CANNOT_DELETE_TYPE1: Cannot delete the type 1 record"
+    );
+    // >>> del msg[0]
+    assert_eq!(
+        raises(msg.remove(0)),
+        "CANNOT_DELETE_TYPE1: Cannot delete the type 1 record"
+    );
+}
+
+#[test]
+fn message_sub() {
+    // >>> msg = Message()
+    let mut msg = Message::new();
+    // >>> r = AsciiRecord(2)
+    let r = Record::from(AsciiRecord::new(2).unwrap());
+    // >>> msg = msg + r
+    msg.push(r.clone()).unwrap();
+    // >>> len(msg)
+    assert_eq!(msg.len(), 2);
+    // >>> msg = msg - r
+    msg.remove_record(&r).unwrap();
+    // >>> len(msg)
+    assert_eq!(msg.len(), 1);
+    // >>> msg = msg - r
+    assert_eq!(
+        raises(msg.remove_record(&r)),
+        "RECORD_NOT_FOUND: Cannot remove a record: record not found"
+    );
+}
+
+#[test]
+fn message_isub() {
+    // >>> msg = Message()
+    let mut msg = Message::new();
+    // >>> r = AsciiRecord(2)
+    let r = Record::from(AsciiRecord::new(2).unwrap());
+    // >>> msg = msg + r
+    msg.push(r.clone()).unwrap();
+    // >>> len(msg)
+    assert_eq!(msg.len(), 2);
+    // >>> msg -= r
+    msg.remove_record(&r).unwrap();
+    // >>> len(msg)
+    assert_eq!(msg.len(), 1);
+    // >>> msg -= r
+    assert_eq!(
+        raises(msg.remove_record(&r)),
+        "RECORD_NOT_FOUND: Cannot remove a record: record not found"
+    );
+}
+
+#[test]
+fn message_cnt() {
+    // >>> msg = Message()
+    let mut msg = Message::new();
+    // >>> r = AsciiRecord(2)
+    let mut r = AsciiRecord::new(2).unwrap();
+    // >>> r.IDC = 3
+    r.set("IDC", 3).unwrap();
+    // >>> msg = msg + r
+    msg.push(r).unwrap();
+    // >>> msg.TOT = 'TEST'
+    msg.set_tot("TEST").unwrap();
+    // >>> len(msg)
+    assert_eq!(msg.len(), 2);
+    // >>> msg.CNT.NIST
+    assert_eq!(
+        msg.cnt().unwrap().to_bytes().unwrap(),
+        b"1.003:1\x1f1\x1e2\x1f3"
+    );
+}
+
+#[test]
+fn message_str() {
+    // >>> msg = Message()
+    let mut msg = Message::new();
+    // >>> r = AsciiRecord(2)
+    let mut r = AsciiRecord::new(2).unwrap();
+    // >>> r.IDC = 3
+    r.set("IDC", 3).unwrap();
+    // >>> msg = msg + r
+    msg.push(r).unwrap();
+    // >>> msg.TOT = 'TEST'
+    msg.set_tot("TEST").unwrap();
+    let t1 = msg.type1_mut().unwrap();
+    // >>> msg[0].DAT = '20190517'
+    t1.set("DAT", "20190517").unwrap();
+    // >>> msg[0].TCN = 'doctest'
+    t1.set("TCN", "doctest").unwrap();
+    // >>> msg[0].TCR = 'TCR'
+    t1.set("TCR", "TCR").unwrap();
+    // >>> print(str(msg))
+    assert_eq!(
+        msg.summary().unwrap(),
+        [
+            " 1.001: LEN                           : 0",
+            " 1.002: VER                           : 0400",
+            " 1.003: CNT                           : [[1, 1], [2, 3]]",
+            " 1.004: TOT                           : TEST",
+            " 1.005: DAT                           : 20190517",
+            " 1.007: DAI                           : 000",
+            " 1.008: ORI                           : 000",
+            " 1.009: TCN                           : doctest",
+            " 1.010: TCR                           : TCR",
+            " 1.011: NSR                           : 00.00",
+            " 1.012: NTR                           : 00.00",
+            " 2.001: LEN                           : 0",
+            " 2.002: IDC                           : 3",
+        ]
+        .join("\n")
+    );
+}
+
+#[test]
+fn message_nist() {
+    // >>> msg = Message()
+    let mut msg = Message::new();
+    // >>> msg.TOT = 'TEST'
+    msg.set_tot("TEST").unwrap();
+    let t1 = msg.type1_mut().unwrap();
+    // >>> msg[0].DAT = '20190517'
+    t1.set("DAT", "20190517").unwrap();
+    // >>> msg[0].TCN = 'doctest'
+    t1.set("TCN", "doctest").unwrap();
+    // >>> msg.NIST
+    assert_eq!(
+        msg.to_bytes().unwrap(),
+        b"1.001:115\x1d1.002:0400\x1d1.003:1\x1f0\x1d1.004:TEST\x1d1.005:20190517\x1d1.007:000\x1d1.008:000\x1d1.009:doctest\x1d1.011:00.00\x1d1.012:00.00\x1c"
+    );
 }
 
 #[test]
