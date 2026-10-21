@@ -5,21 +5,24 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-// The alias lookups and error constructors are consumed by the record and
-// message modules, which come in the next development steps.
-#[allow(dead_code)]
 mod alias;
 mod bytes;
+mod defaults;
+// Some error constructors are consumed by the message module, which comes in
+// a next development step.
 #[allow(dead_code)]
 mod error;
 mod field;
 mod py;
+mod record;
 mod subfield;
 mod value;
 
 pub use bytes::Bytes;
+pub use defaults::Defaults;
 pub use error::{Error, ErrorKind, NistError, Position, Result};
 pub use field::{AnyField, BinaryField, Field};
+pub use record::{AsciiRecord, FieldKey};
 pub use subfield::SubField;
 pub use value::{Item, Kind, ListElem, PyInt, Scalar, SubValue, Value};
 

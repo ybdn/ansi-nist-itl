@@ -11,3 +11,9 @@ keywords = ["nist", "biometrics", "fingerprint", "ansi-nist-itl", "parser"]
 categories = ["parser-implementations", "encoding"]
 
 [dependencies]
+chrono = { version = "0.4.38", default-features = false, features = ["clock"], optional = true }
+
+[features]
+default = ["local-date"]
+# Today's date in local time, as `datetime.today()` (SPEC §8.1); UTC without it.
+local-date = ["dep:chrono"]

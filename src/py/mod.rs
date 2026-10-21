@@ -14,14 +14,12 @@ mod repr;
 mod unicode_tables;
 
 pub(crate) use encode::{EncodeError, encode_latin1};
-pub(crate) use format::{BadFormat, PrintfTemplate};
+pub(crate) use format::{BadFormat, PrintfTemplate, pad_int, pad_str, thousands};
 pub(crate) use int::{IntError, py_int};
 pub(crate) use repr::{repr_bytes, repr_str};
 
-// Consumed by the record summaries (SPEC §8.9, §10.6) and the `struct` values
-// (§9.6), which come in the next development steps.
-#[allow(unused_imports)]
-pub(crate) use format::{pad_str, thousands};
+// Consumed by the `struct` values (SPEC §9.6), which come in a next
+// development step.
 #[allow(unused_imports)]
 pub(crate) use repr::float_repr;
 
