@@ -24,7 +24,7 @@ pub use error::{
 };
 pub use field::{AnyField, BinaryField, Field};
 pub use message::{Message, ParseOptions, Parsed, RecordVisitor, parse_record};
-pub use record::{AsciiRecord, BinaryRecord, FieldKey, Record};
+pub use record::{AsciiRecord, BinaryRecord, FieldKey, ImageHeader, Record, SignatureHeader};
 pub use structfmt::StructValue;
 pub use subfield::SubField;
 pub use value::{Item, Kind, ListElem, PyInt, Scalar, SubValue, Value};
