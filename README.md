@@ -69,6 +69,12 @@ against `nistitl` itself: an oracle bench compares both on whole corpora (synthe
 real ones locally, never committed), and three fuzz targets cover parsing, exact writing and
 the tolerant mode. See [`tools/oracle/README.md`](tools/oracle/README.md).
 
+Benchmarks run on synthetic messages from 4 KiB to 8 MiB:
+
+```sh
+cargo bench --bench message
+```
+
 ## Acknowledgements
 
 This crate is a Rust port of [`nistitl`](https://github.com/idemia/python-nistitl)

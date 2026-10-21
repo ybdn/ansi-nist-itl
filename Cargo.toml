@@ -15,7 +15,13 @@ exclude = ["/fuzz", "/tools", "/docs", "/.github"]
 chrono = { version = "0.4.38", default-features = false, features = ["clock"], optional = true }
 
 [dev-dependencies]
+# 0.7: the last version for Rust 1.85 (QA-07).
+criterion = { version = "0.7", default-features = false, features = ["cargo_bench_support"] }
 proptest = { version = "1.5", default-features = false, features = ["std"] }
+
+[[bench]]
+name = "message"
+harness = false
 
 [features]
 default = ["local-date"]
