@@ -466,6 +466,29 @@ impl Error {
             ),
         )
     }
+
+    /// `TypeError` of `bytes + int`: a binary field given the length of its
+    /// record (SPEC §8.8).
+    pub(crate) fn concat_int_to_bytes() -> Self {
+        Error::new(ErrorKind::TypeMismatch, "can't concat int to bytes")
+    }
+
+    /// Text value given to a binary field (SPEC §11): no Python counterpart.
+    pub(crate) fn binary_field_value(tag: impl fmt::Display) -> Self {
+        Error::new(
+            ErrorKind::TypeMismatch,
+            format!("field {tag} is binary: its value must be bytes"),
+        )
+    }
+
+    /// Bytes given to, or read from, a text field (SPEC §11): no Python
+    /// counterpart.
+    pub(crate) fn text_field_value(tag: impl fmt::Display) -> Self {
+        Error::new(
+            ErrorKind::TypeMismatch,
+            format!("field {tag} is text: its value cannot be bytes"),
+        )
+    }
 }
 
 impl fmt::Display for Error {
