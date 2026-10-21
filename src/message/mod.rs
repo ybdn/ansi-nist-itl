@@ -9,6 +9,7 @@ pub use lexer::{RecordVisitor, parse_record};
 pub use parse::{ParseOptions, Parsed};
 
 use crate::alias;
+use crate::bytes::Bytes;
 use crate::defaults::Defaults;
 use crate::error::{Error, Position, Result};
 use crate::field::{AnyField, Field};
@@ -69,6 +70,8 @@ pub struct Message {
     /// Type and IDC of each record as read, for the exact writing
     /// (SPEC §13.1).
     layout: Option<Vec<(u32, Option<Value>)>>,
+    /// Bytes after the records, kept by the tolerant mode (SPEC §13.2).
+    trailing: Bytes,
 }
 
 impl PartialEq for Message {
@@ -125,6 +128,7 @@ impl Message {
         let mut msg = Message {
             records: Vec::new(),
             layout: None,
+            trailing: Bytes::new(),
         };
         msg.reset_with(true, true, defaults);
         msg
@@ -154,6 +158,7 @@ impl Message {
             .or_else(|_| AsciiRecord::with(1, false, autosort));
         self.records = type1.map(Record::Ascii).into_iter().collect();
         self.layout = None;
+        self.trailing = Bytes::new();
     }
 
     /// Adds a record at the end (`msg += record`). A Type-1 gives
@@ -217,6 +222,24 @@ impl Message {
         self.records
             .iter()
             .filter(move |r| r.record_type() == record_type)
+    }
+
+    /// Bytes after the last record, that the tolerant mode could not read
+    /// (SPEC §13.2); empty otherwise. [`to_bytes_exact`](Message::to_bytes_exact)
+    /// writes them back, [`to_bytes`](Message::to_bytes) does not.
+    ///
+    /// ```
+    /// use ansi_nist_itl::{Message, ParseOptions};
+    ///
+    /// let mut bytes = Message::new().to_bytes()?;
+    /// bytes.extend_from_slice(b"\x00\x00");
+    /// let parsed = Message::parse_with(&bytes, ParseOptions::tolerant())?;
+    /// assert_eq!(parsed.message.trailing(), b"\x00\x00");
+    /// assert!(Message::new().trailing().is_empty());
+    /// # Ok::<(), ansi_nist_itl::Error>(())
+    /// ```
+    pub fn trailing(&self) -> &[u8] {
+        &self.trailing
     }
 
     /// Record at `index` (`msg[i]`), the Type-1 being at 0.

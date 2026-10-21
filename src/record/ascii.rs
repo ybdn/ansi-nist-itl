@@ -181,6 +181,8 @@ pub struct AsciiRecord {
     autosort: bool,
     /// What the parsing read, for the exact writing (SPEC §13.1).
     origin: Option<Box<AsciiOrigin>>,
+    /// Read by the tolerant mode with an unknown type: no alias table.
+    untabled: bool,
 }
 
 /// Bytes of a field as read, for the exact writing (SPEC §13.1).
@@ -289,6 +291,7 @@ impl AsciiRecord {
             fields: Vec::new(),
             autosort,
             origin: None,
+            untabled: false,
         };
         if !autocreate {
             return Ok(record);
@@ -815,6 +818,14 @@ impl AsciiRecord {
         lines.join("\n")
     }
 
+    /// Removes every field of tag `tag`, then adds `field` (tolerant mode:
+    /// a duplicate replaces the first occurrence).
+    pub(crate) fn replace_field(&mut self, field: AnyField) -> Result<&mut Self> {
+        let tag = field.tag().clone();
+        self.fields.retain(|f| f.tag() != &tag);
+        self.add_field(field)
+    }
+
     /// Records what the parsing read, the fields being taken as they are now.
     pub(crate) fn set_origin(&mut self, segments: Vec<Bytes>, raw: Vec<RawField>) {
         self.origin = Some(Box::new(AsciiOrigin {
@@ -942,8 +953,23 @@ impl AsciiRecord {
         Ok(out)
     }
 
+    /// An empty record of a type absent from the alias table, whose fields
+    /// get no alias (tolerant mode, SPEC §13.2).
+    pub(crate) fn untabled(record_type: u32) -> Self {
+        AsciiRecord {
+            record_type,
+            fields: Vec::new(),
+            autosort: true,
+            origin: None,
+            untabled: alias::table(record_type).is_none(),
+        }
+    }
+
     /// `ALIASES[type]`.
     fn alias_table(&self) -> Result<&'static [(u32, &'static str)]> {
+        if self.untabled {
+            return Ok(&[]);
+        }
         alias::table(self.record_type).ok_or_else(|| {
             Error::unknown_record_type(PyInt::from(self.record_type))
                 .with_position(self.record_position())

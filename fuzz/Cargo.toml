@@ -25,6 +25,13 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "parse_tolerant"
+path = "fuzz_targets/parse_tolerant.rs"
+test = false
+doc = false
+bench = false
+
 # Kept out of the workspace of the crate.
 [workspace]
 members = ["."]

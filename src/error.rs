@@ -588,6 +588,129 @@ impl fmt::Display for Warning {
     }
 }
 
+/// Kind of a [`Diagnostic`] of the tolerant mode (SPEC §13.2).
+///
+/// ```
+/// use ansi_nist_itl::{DiagnosticCode, Message, ParseOptions};
+///
+/// let parsed = Message::parse_with(b"", ParseOptions::tolerant())?;
+/// assert_eq!(parsed.diagnostics[0].code, DiagnosticCode::MissingType1);
+/// # Ok::<(), ansi_nist_itl::Error>(())
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum DiagnosticCode {
+    /// The buffer ends before the LEN of a record: the record is kept as
+    /// read, then the parsing stops.
+    Truncated,
+    /// The LEN of a record ends before its FS or its data label: the record
+    /// is extended to them.
+    LenMismatch,
+    /// A field without a valid label: it is skipped.
+    BadField,
+    /// A field labelled with another record type: it is kept in the record.
+    TagRecordMismatch,
+    /// A tag defined twice: the second occurrence replaces the first.
+    DuplicateTag,
+    /// The data label is not preceded by a valid label: the record is read
+    /// as text.
+    BadDataTag,
+    /// A LEN or IDC that is not a number: it is kept as text.
+    InvalidNumber,
+    /// A record type absent from the alias table: the record is read
+    /// without aliases nor data field.
+    UnknownRecordType,
+    /// A binary record that the CNT does not describe, or shorter than its
+    /// header: the parsing stops, the rest goes to
+    /// [`Message::trailing`](crate::Message::trailing).
+    UnknownBinaryRecord,
+    /// A binary record whose CNT type is a tagged type: it is kept as a
+    /// binary record.
+    UnexpectedBinaryRecord,
+    /// A tagged record without FS nor data label: it extends to the end of
+    /// the buffer.
+    Unterminated,
+    /// Bytes after the last record, kept in
+    /// [`Message::trailing`](crate::Message::trailing).
+    TrailingBytes,
+    /// The CNT does not describe the records read; they prevail.
+    CntMismatch,
+    /// No CNT, or no Type-1 first: an empty Type-1 heads the records read.
+    MissingType1,
+    /// The data label was found in a text value (SPEC E3).
+    DataTagInText,
+    /// The last byte of a record with data is not FS; it is dropped (E4).
+    MissingFinalFs,
+    /// Fields follow the data field; they are part of the data (E5).
+    DataNotLast,
+}
+
+/// Severity of a [`Diagnostic`].
+///
+/// ```
+/// use ansi_nist_itl::Severity;
+///
+/// assert!(Severity::Warning < Severity::Error);
+/// assert!(Severity::Error < Severity::Fatal);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Severity {
+    /// The data are read in full, but not as the standard says.
+    Warning,
+    /// Some data are lost or guessed.
+    Error,
+    /// The parsing stopped before the end of the buffer.
+    Fatal,
+}
+
+/// A problem met by the tolerant mode, and how it was overcome
+/// (SPEC §13.2).
+///
+/// `message` is the text of the error that `nistitl` would have raised;
+/// `Display` gives the severity, the code and this text.
+///
+/// ```
+/// use ansi_nist_itl::{Message, ParseOptions, Severity};
+///
+/// let mut bytes = Message::new().to_bytes()?;
+/// bytes.extend_from_slice(b"xyz");
+/// let parsed = Message::parse_with(&bytes, ParseOptions::tolerant())?;
+/// let d = &parsed.diagnostics[0];
+/// assert_eq!(d.severity, Severity::Warning);
+/// assert_eq!(d.message, "NIST_TOO_LONG: NIST buffer too long (extra bytes)");
+/// assert_eq!(parsed.message.trailing(), b"xyz");
+/// # Ok::<(), ansi_nist_itl::Error>(())
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Diagnostic {
+    /// What happened.
+    pub code: DiagnosticCode,
+    /// How serious it is.
+    pub severity: Severity,
+    /// Where it happened.
+    pub position: Position,
+    /// Text of the error that `nistitl` would have raised.
+    pub message: String,
+}
+
+impl Diagnostic {
+    pub(crate) fn new(code: DiagnosticCode, severity: Severity, error: &Error) -> Self {
+        Diagnostic {
+            code,
+            severity,
+            position: error.position().clone(),
+            message: error.to_string(),
+        }
+    }
+}
+
+impl fmt::Display for Diagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?} ({:?}): {}", self.severity, self.code, self.message)
+    }
+}
+
 impl From<IntError> for Error {
     fn from(e: IntError) -> Self {
         let kind = match e {
