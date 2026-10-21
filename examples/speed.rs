@@ -32,7 +32,9 @@ fn files(path: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
 fn main() -> std::io::Result<()> {
     let mut args = std::env::args().skip(1);
     let path = PathBuf::from(args.next().expect("a file or directory"));
-    let passes: u32 = args.next().map_or(5, |p| p.parse().expect("a number of passes"));
+    let passes: u32 = args
+        .next()
+        .map_or(5, |p| p.parse().expect("a number of passes"));
     let mut paths = Vec::new();
     files(&path, &mut paths)?;
     let buffers: Vec<Vec<u8>> = paths.iter().map(std::fs::read).collect::<Result<_, _>>()?;
