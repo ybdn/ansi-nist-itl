@@ -8,7 +8,7 @@
 
 use std::fmt;
 
-use crate::py::{BadFormat, IntError, repr_str};
+use crate::py::{BadFormat, EncodeError, IntError, repr_str};
 use crate::value::PyInt;
 
 /// `Result` with the crate's [`Error`].
@@ -161,22 +161,27 @@ pub struct Position {
 /// `Display` gives the text of the Python exception, character for
 /// character: `"{NAME}: {message}"` for a `NistException`, the bare message
 /// otherwise.
+///
+/// The content is boxed, so that `Result<T, Error>` stays small.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Error {
+pub struct Error(Box<Inner>);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Inner {
     kind: ErrorKind,
     message: String,
     position: Position,
-    source: Option<Box<Error>>,
+    source: Option<Error>,
 }
 
 impl Error {
     pub(crate) fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
-        Error {
+        Error(Box::new(Inner {
             kind,
             message: message.into(),
             position: Position::default(),
             source: None,
-        }
+        }))
     }
 
     fn nist(code: NistError, message: impl Into<String>) -> Self {
@@ -185,39 +190,39 @@ impl Error {
 
     /// Category of the error.
     pub fn kind(&self) -> &ErrorKind {
-        &self.kind
+        &self.0.kind
     }
 
     /// Message of the exception, without the `NistError` name.
     pub fn message(&self) -> &str {
-        &self.message
+        &self.0.message
     }
 
     /// Where the error occurred, as far as known.
     pub fn position(&self) -> &Position {
-        &self.position
+        &self.0.position
     }
 
     /// The `nistitl` code, for a `NistException`.
     pub fn nist_error(&self) -> Option<NistError> {
-        match self.kind {
+        match self.0.kind {
             ErrorKind::Nist(code) => Some(code),
             _ => None,
         }
     }
 
     pub(crate) fn with_position(mut self, position: Position) -> Self {
-        self.position = position;
+        self.0.position = position;
         self
     }
 
     pub(crate) fn position_mut(&mut self) -> &mut Position {
-        &mut self.position
+        &mut self.0.position
     }
 
     /// `raise self from source`.
     pub(crate) fn with_source(mut self, source: Error) -> Self {
-        self.source = Some(Box::new(source));
+        self.0.source = Some(source);
         self
     }
 
@@ -445,21 +450,38 @@ impl Error {
     pub(crate) fn empty_sequence() -> Self {
         Error::new(ErrorKind::EmptySequence, "min() iterable argument is empty")
     }
+
+    /// `IndexError` of a list.
+    pub(crate) fn index_out_of_range() -> Self {
+        Error::new(ErrorKind::IndexOutOfRange, "list index out of range")
+    }
+
+    /// `TypeError` of `int()` on a value of Python type `type_name` (`NoneType`).
+    pub(crate) fn int_argument(type_name: &str) -> Self {
+        Error::new(
+            ErrorKind::TypeMismatch,
+            format!(
+                "int() argument must be a string, a bytes-like object or a real number, not {}",
+                repr_str(type_name)
+            ),
+        )
+    }
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.kind {
-            ErrorKind::Nist(code) => write!(f, "{}: {}", code.name(), self.message),
-            _ => f.write_str(&self.message),
+        match self.0.kind {
+            ErrorKind::Nist(code) => write!(f, "{}: {}", code.name(), self.0.message),
+            _ => f.write_str(&self.0.message),
         }
     }
 }
 
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.source
-            .as_deref()
+        self.0
+            .source
+            .as_ref()
             .map(|e| e as &(dyn std::error::Error + 'static))
     }
 }
@@ -471,6 +493,12 @@ impl From<IntError> for Error {
             IntError::DigitsLimit(_) => ErrorKind::DigitsLimit,
         };
         Error::new(kind, e.to_string())
+    }
+}
+
+impl From<EncodeError> for Error {
+    fn from(e: EncodeError) -> Self {
+        Error::new(ErrorKind::Encoding, e.to_string())
     }
 }
 
@@ -489,7 +517,7 @@ impl From<std::io::Error> for Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::py::{PrintfTemplate, py_int};
+    use crate::py::{PrintfTemplate, encode_latin1, py_int};
     use std::error::Error as _;
 
     #[test]
@@ -652,6 +680,24 @@ mod tests {
         let e = Error::from(py_int(&"0".repeat(4301)).unwrap_err());
         assert_eq!(e.kind(), &ErrorKind::DigitsLimit);
         assert!(e.to_string().starts_with("Exceeds the limit (4300 digits)"));
+
+        let e = Error::index_out_of_range();
+        assert_eq!(e.kind(), &ErrorKind::IndexOutOfRange);
+        assert_eq!(e.to_string(), "list index out of range");
+
+        let e = Error::int_argument("NoneType");
+        assert_eq!(e.kind(), &ErrorKind::TypeMismatch);
+        assert_eq!(
+            e.to_string(),
+            "int() argument must be a string, a bytes-like object or a real number, not 'NoneType'"
+        );
+
+        let e = Error::from(encode_latin1("\u{20ac}").unwrap_err());
+        assert_eq!(e.kind(), &ErrorKind::Encoding);
+        assert_eq!(
+            e.to_string(),
+            "'latin-1' codec can't encode character '\\u20ac' in position 0: ordinal not in range(256)"
+        );
 
         let e = Error::from(PrintfTemplate::parse("%s").unwrap_err());
         assert_eq!(e.kind(), &ErrorKind::BadFormat);

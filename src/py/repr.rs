@@ -111,6 +111,7 @@ fn shortest_sci(f: f64) -> String {
 }
 
 /// `repr(f)` (and `str(f)`) for a `float`.
+#[allow(dead_code)] // Not used yet, see `py/mod.rs`.
 pub(crate) fn float_repr(f: f64) -> String {
     if f.is_nan() {
         return "nan".to_owned();
