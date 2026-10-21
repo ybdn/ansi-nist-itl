@@ -202,6 +202,7 @@ mod defaults;
 pub mod dictionary;
 mod error;
 mod field;
+pub mod image;
 mod message;
 mod py;
 mod record;

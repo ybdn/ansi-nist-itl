@@ -11,6 +11,9 @@ fuzz_target!(|data: &[u8]| {
         return;
     };
     let _ = msg.summary();
+    for record in msg.records() {
+        let _ = record.image_info();
+    }
     if let Ok(bytes) = msg.to_bytes() {
         let _ = Message::parse(&bytes);
     }

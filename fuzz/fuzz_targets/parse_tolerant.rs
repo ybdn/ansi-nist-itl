@@ -16,6 +16,9 @@ fuzz_target!(|data: &[u8]| {
     }
     assert_eq!(parsed.message.to_bytes_exact().ok().as_deref(), Some(data));
     let mut message = parsed.message;
+    for record in message.records() {
+        let _ = record.image_info();
+    }
     let _ = message.summary();
     let _ = message.to_bytes();
 });
