@@ -477,6 +477,24 @@ impl Error {
         Error::new(kind, format!("object of type '{class}' has no len()"))
     }
 
+    /// A typed header asked of a binary record of another type (SPEC §13.3).
+    pub(crate) fn header_type(header: &str, record_type: u32, types: &str) -> Self {
+        Error::nist(
+            NistError::BadContent,
+            format!("No {header} header in a record of type {record_type} ({types} only)"),
+        )
+    }
+
+    /// A binary record too short for its typed header (SPEC §13.3).
+    pub(crate) fn header_too_short(record_type: u32, len: usize, needed: usize) -> Self {
+        Error::nist(
+            NistError::BadContent,
+            format!(
+                "Record of type {record_type} too short for its header: {len} bytes, {needed} needed"
+            ),
+        )
+    }
+
     /// `IndexError` of `del list[i]`.
     pub(crate) fn assignment_index_out_of_range() -> Self {
         Error::new(

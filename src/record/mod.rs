@@ -5,7 +5,7 @@ mod binary;
 
 pub(crate) use ascii::RawField;
 pub use ascii::{AsciiRecord, FieldKey};
-pub use binary::BinaryRecord;
+pub use binary::{BinaryRecord, ImageHeader, SignatureHeader};
 
 use crate::alias;
 use crate::bytes::Bytes;
