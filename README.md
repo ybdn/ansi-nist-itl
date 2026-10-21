@@ -77,7 +77,10 @@ against `nistitl` itself: an oracle bench compares both on whole corpora (synthe
 real ones locally, never committed), and three fuzz targets cover parsing, exact writing and
 the tolerant mode. See [`tools/oracle/README.md`](tools/oracle/README.md).
 
-Benchmarks run on synthetic messages from 4 KiB to 8 MiB:
+Compared with `nistitl` on the same corpora, the crate reads and writes messages 3 to 4 times
+faster, and as fast on large images, where both run at the speed of memory: see
+[`docs/SPEED.md`](docs/SPEED.md). Benchmarks of the crate alone run on synthetic messages from
+4 KiB to 8 MiB:
 
 ```sh
 cargo bench --bench message
