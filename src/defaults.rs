@@ -108,12 +108,21 @@ fn tcn() -> String {
             now
         }
     };
-    let last = LAST_TIMESTAMP
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |last| {
-            Some(next(last))
-        })
-        .unwrap_or_else(|last| last);
-    let timestamp = next(last);
+    // `fetch_update` is deprecated on recent toolchains, and its successor
+    // `try_update` does not exist on the MSRV: an explicit loop.
+    let mut last = LAST_TIMESTAMP.load(Ordering::Relaxed);
+    let timestamp = loop {
+        let timestamp = next(last);
+        match LAST_TIMESTAMP.compare_exchange_weak(
+            last,
+            timestamp,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => break timestamp,
+            Err(current) => last = current,
+        }
+    };
     let random = random_u64(timestamp);
     let clock_seq = random & 0x3FFF;
     let node = ((random >> 14) & 0xFFFF_FFFF_FFFF) | 0x0100_0000_0000;
