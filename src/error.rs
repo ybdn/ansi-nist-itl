@@ -467,6 +467,46 @@ impl Error {
         )
     }
 
+    /// `IndexError` of `del list[i]`.
+    pub(crate) fn assignment_index_out_of_range() -> Self {
+        Error::new(
+            ErrorKind::IndexOutOfRange,
+            "list assignment index out of range",
+        )
+    }
+
+    /// `TypeError` of `del list[(t, idc)]`.
+    pub(crate) fn tuple_index() -> Self {
+        Error::new(
+            ErrorKind::TypeMismatch,
+            "list indices must be integers or slices, not tuple",
+        )
+    }
+
+    /// `AttributeError` on a missing field (`None`), such as an absent CNT.
+    pub(crate) fn none_attribute(attribute: &str) -> Self {
+        Error::new(
+            ErrorKind::MissingField,
+            format!("'NoneType' object has no attribute '{attribute}'"),
+        )
+    }
+
+    /// `AttributeError` on an object of the wrong class.
+    pub(crate) fn no_attribute(class: &str, attribute: &str) -> Self {
+        Error::new(
+            ErrorKind::TypeMismatch,
+            format!("'{class}' object has no attribute '{attribute}'"),
+        )
+    }
+
+    /// `TypeError` of `record[key]` on a binary record.
+    pub(crate) fn not_subscriptable(class: &str) -> Self {
+        Error::new(
+            ErrorKind::TypeMismatch,
+            format!("'{class}' object is not subscriptable"),
+        )
+    }
+
     /// `TypeError` of `bytes + int`: a binary field given the length of its
     /// record (SPEC §8.8).
     pub(crate) fn concat_int_to_bytes() -> Self {

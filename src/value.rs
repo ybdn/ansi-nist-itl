@@ -523,6 +523,34 @@ impl From<Scalar> for Value {
     }
 }
 
+impl From<ListElem> for Item {
+    /// A subfield value as an item: a list stays a nested list.
+    fn from(e: ListElem) -> Self {
+        match e {
+            ListElem::Scalar(s) => Item::Scalar(s),
+            ListElem::List(items) => Item::List(items),
+        }
+    }
+}
+
+impl From<Value> for Item {
+    /// A field value as an item (`sf.add_values(r.IDC)`): a list stays a
+    /// nested list, written with `str()`.
+    ///
+    /// ```
+    /// use ansi_nist_itl::{Item, Value};
+    ///
+    /// assert_eq!(Item::from(Value::from("07")), Item::from("07"));
+    /// assert_eq!(Item::from(Value::from(vec!["1", "2"])).to_string(), "['1', '2']");
+    /// ```
+    fn from(v: Value) -> Self {
+        match v {
+            Value::Scalar(s) => Item::Scalar(s),
+            Value::List(elems) => Item::List(elems.into_iter().map(Item::from).collect()),
+        }
+    }
+}
+
 impl<T: Into<Item>> From<Vec<T>> for Item {
     fn from(v: Vec<T>) -> Self {
         Item::List(v.into_iter().map(Into::into).collect())
