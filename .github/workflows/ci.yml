@@ -63,6 +63,25 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --no-deps --all-features
 
+  oracle:
+    name: Oracle (nistitl 0.6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install nistitl==0.6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Synthetic corpus (seed = run number)
+        run: python -I tools/oracle/gen_corpus.py "$RUNNER_TEMP/corpus" 20000 "$GITHUB_RUN_NUMBER"
+      - name: Compare with nistitl
+        run: cargo test --release --test oracle
+        env:
+          ANSI_NIST_ITL_CORPUS: ${{ runner.temp }}/corpus
+          ANSI_NIST_ITL_PYTHON: python
+
   data:
     name: Data files (DATA-04)
     runs-on: ubuntu-latest
