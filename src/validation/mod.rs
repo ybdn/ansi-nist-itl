@@ -33,6 +33,12 @@
 //! # Ok::<(), ansi_nist_itl::Error>(())
 //! ```
 
+mod ebts;
+// Generated: kept as the generator writes it.
+#[rustfmt::skip]
+mod ebts112;
+mod inti;
+
 use std::fmt;
 
 use crate::dictionary::{
@@ -111,13 +117,19 @@ pub struct Finding {
     pub subfield: Option<usize>,
     /// Index of the item in its subfield, from 0.
     pub item: Option<usize>,
+    /// The profile whose rule this is; `None` for a rule of the standard.
+    pub profile: Option<Profile>,
     /// What is wrong.
     pub message: String,
 }
 
 impl fmt::Display for Finding {
-    /// `type.tag: message`, with the subfield and item when known.
+    /// `type.tag: message`, with the subfield and item when known, after
+    /// the profile.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(p) = self.profile {
+            write!(f, "{p}: ")?;
+        }
         if let Some(t) = self.position.record_type {
             write!(f, "{t}")?;
             if let Some(tag) = &self.position.tag {
@@ -193,9 +205,83 @@ pub enum Rule {
     Type1Ascii,
     /// CNT (1.003) does not list the records of the message.
     Content,
+    /// A type of transaction (1.004) the profile does not define.
+    TransactionType,
+    /// Too few or too many records of a type for the transaction.
+    RecordCount,
+    /// A field the transaction does not use.
+    FieldNotInTransaction,
+    /// A value that does not have the form the profile requires.
+    Format,
+}
+
+/// An application profile: rules of an organization on top of the
+/// standard (LIB-17).
+///
+/// ```
+/// use ansi_nist_itl::validation::Profile;
+///
+/// assert_eq!(Profile::Ebts112.to_string(), "EBTS 11.2");
+/// assert_eq!(Profile::IntI503.to_string(), "INT-I 5.03");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum Profile {
+    /// FBI CJIS Electronic Biometric Transmission Specification 11.2
+    /// (September 20, 2023), on ANSI/NIST-ITL 1-2011 Update 2015.
+    Ebts112,
+    /// INTERPOL Implementation 5.03 (April 7, 2011), on ANSI/NIST-ITL
+    /// 1-2007 (version `0400`), the last one in traditional encoding.
+    IntI503,
+}
+
+impl fmt::Display for Profile {
+    /// Short name of the profile.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Profile::Ebts112 => "EBTS 11.2",
+            Profile::IntI503 => "INT-I 5.03",
+        })
+    }
 }
 
 impl Message {
+    /// Validates the message against an application profile: the rules of
+    /// the standard the profile is built on (Update 2015 for EBTS 11.2; for
+    /// INT-I 5.03, on 1-2007, only CNT), then those of the profile.
+    ///
+    /// ```
+    /// use ansi_nist_itl::validation::{Profile, Rule};
+    /// use ansi_nist_itl::Message;
+    ///
+    /// let mut msg = Message::new();
+    /// msg.set_tot("XYZ")?;
+    /// let report = msg.validate_profile(Profile::IntI503);
+    /// let tot = report.findings.iter().find(|f| f.rule == Rule::TransactionType).unwrap();
+    /// assert_eq!(tot.profile, Some(Profile::IntI503));
+    /// assert_eq!(tot.to_string(), "INT-I 5.03: 1.004: XYZ is not a type of transaction of INT-I 5.03");
+    /// # Ok::<(), ansi_nist_itl::Error>(())
+    /// ```
+    pub fn validate_profile(&self, profile: Profile) -> Validation {
+        let mut v = match profile {
+            Profile::Ebts112 => {
+                let mut v = Validator::new(Some(Standard::Update2015));
+                for (index, record) in self.records().iter().enumerate() {
+                    v.record(Standard::Update2015, index, record);
+                }
+                v
+            }
+            Profile::IntI503 => Validator::new(None),
+        };
+        v.content(self);
+        v.profile = Some(profile);
+        match profile {
+            Profile::Ebts112 => ebts::check(&mut v, self),
+            Profile::IntI503 => inti::check(&mut v, self),
+        }
+        v.into_validation()
+    }
+
     /// Validates the message against the tables of its version (1.002);
     /// without tables for it, only the CNT is checked, with a
     /// [`Rule::Version`] warning.
@@ -294,6 +380,8 @@ impl Here {
 
 struct Validator {
     standard: Option<Standard>,
+    /// The profile whose rules are being checked.
+    profile: Option<Profile>,
     findings: Vec<Finding>,
 }
 
@@ -301,6 +389,7 @@ impl Validator {
     fn new(standard: Option<Standard>) -> Self {
         Validator {
             standard,
+            profile: None,
             findings: Vec::new(),
         }
     }
@@ -324,6 +413,7 @@ impl Validator {
             },
             subfield: here.subfield,
             item: here.item,
+            profile: self.profile,
             message,
         });
     }
