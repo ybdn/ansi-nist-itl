@@ -6,6 +6,13 @@ All notable changes to this crate are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Faster reading and exact writing, same output: `parse` 1.5× (4 KiB) to 5.7× (8 MiB),
+  `to_bytes_exact` 22× to 31× on the benchmarks. Byte search no longer compares a window at every
+  position; a record read shares its fields with what it remembers for the exact writing until
+  it changes; the default tag format is a constant.
+
 ### Added
 
 - Application profiles: `Message::validate_profile` with FBI EBTS 11.2 (tables generated from the

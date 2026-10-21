@@ -1,6 +1,8 @@
 //! Exact writing (`to_bytes_exact`, SPEC §13.1, LIB-12): the bytes read for
 //! what did not change.
 
+use std::borrow::Cow;
+
 use super::{Message, rebuild_cnt};
 use crate::error::Result;
 use crate::record::Record;
@@ -85,17 +87,21 @@ impl Message {
             // Every record was read and the CNT still holds: the bytes in the
             // order read, a changed record taking the place of its first
             // bytes (a second Type-1 merged into the first one is dropped).
-            let mut parts: Vec<(usize, Vec<u8>)> = Vec::new();
+            let mut parts: Vec<(usize, Cow<'_, [u8]>)> = Vec::new();
             for (i, r) in self.records.iter().enumerate() {
                 let segments = r.segments();
                 if r.is_unchanged() {
-                    parts.extend(segments.iter().map(|s| (s.offset(), s.to_vec())));
+                    parts.extend(segments.iter().map(|s| (s.offset(), Cow::Borrowed(&s[..]))));
                 } else if let Some(first) = segments.first() {
-                    parts.push((first.offset(), record_bytes(i, r)?));
+                    parts.push((first.offset(), Cow::Owned(record_bytes(i, r)?)));
                 }
             }
             parts.sort_by_key(|&(offset, _)| offset);
-            let mut out: Vec<u8> = parts.into_iter().flat_map(|(_, bytes)| bytes).collect();
+            let size = parts.iter().map(|(_, b)| b.len()).sum::<usize>() + self.trailing.len();
+            let mut out = Vec::with_capacity(size);
+            for (_, bytes) in &parts {
+                out.extend_from_slice(bytes);
+            }
             out.extend_from_slice(&self.trailing);
             return Ok(out);
         }

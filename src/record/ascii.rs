@@ -1,6 +1,7 @@
 //! Tagged records (SPEC §8).
 
 use std::fmt;
+use std::sync::Arc;
 
 use crate::alias;
 use crate::bytes::Bytes;
@@ -177,7 +178,8 @@ fn same_shape(a: &AnyField, b: &AnyField) -> bool {
 #[derive(Clone)]
 pub struct AsciiRecord {
     record_type: u32,
-    fields: Vec<AnyField>,
+    /// Shared with the origin until the first change (copy on write).
+    fields: Arc<Vec<AnyField>>,
     autosort: bool,
     /// What the parsing read, for the exact writing (SPEC §13.1).
     origin: Option<Box<AsciiOrigin>>,
@@ -198,7 +200,7 @@ pub(crate) struct RawField {
 #[derive(Debug, Clone)]
 pub(crate) struct AsciiOrigin {
     pub(crate) segments: Vec<Bytes>,
-    pub(crate) fields: Vec<AnyField>,
+    pub(crate) fields: Arc<Vec<AnyField>>,
     pub(crate) raw: Vec<RawField>,
 }
 
@@ -288,7 +290,7 @@ impl AsciiRecord {
     ) -> Result<Self> {
         let mut record = AsciiRecord {
             record_type,
-            fields: Vec::new(),
+            fields: Arc::default(),
             autosort,
             origin: None,
             untabled: false,
@@ -418,7 +420,7 @@ impl AsciiRecord {
                     .with_position(self.field_position(field.tag())),
             );
         }
-        for other in &self.fields {
+        for other in self.fields.iter() {
             if other.tag() == field.tag() {
                 return Err(Error::tag_duplicate(field.tag(), self.record_type)
                     .with_position(self.field_position(field.tag())));
@@ -428,7 +430,7 @@ impl AsciiRecord {
                     .with_position(self.field_position(field.tag())));
             }
         }
-        self.fields.push(field);
+        self.fields_mut().push(field);
         Ok(self)
     }
 
@@ -465,7 +467,9 @@ impl AsciiRecord {
     /// ```
     pub fn field_mut(&mut self, key: impl Into<FieldKey>) -> Option<&mut AnyField> {
         let key = key.into();
-        self.fields.iter_mut().find(|f| Self::matches(f, &key))
+        self.fields_mut()
+            .iter_mut()
+            .find(|f| Self::matches(f, &key))
     }
 
     fn matches(field: &AnyField, key: &FieldKey) -> bool {
@@ -501,7 +505,7 @@ impl AsciiRecord {
     pub fn remove_field(&mut self, tag: impl Into<PyInt>) -> Option<AnyField> {
         let tag = tag.into();
         let index = self.fields.iter().position(|f| f.tag() == &tag)?;
-        Some(self.fields.remove(index))
+        Some(self.fields_mut().remove(index))
     }
 
     /// Sets a field by name (`record.name = value`).
@@ -572,7 +576,7 @@ impl AsciiRecord {
     }
 
     fn assign(&mut self, name: &str, value: Assigned) -> Result<()> {
-        if let Some(field) = self.fields.iter_mut().find(|f| f.alias() == name) {
+        if let Some(field) = self.fields_mut().iter_mut().find(|f| f.alias() == name) {
             return value.assign_to(field);
         }
         let record_type = self.record_type;
@@ -601,7 +605,7 @@ impl AsciiRecord {
                 Error::bad_attribute_set(name, record_type).with_position(self.record_position())
             );
         };
-        if let Some(field) = self.fields.iter_mut().find(|f| f.tag() == &tag) {
+        if let Some(field) = self.fields_mut().iter_mut().find(|f| f.tag() == &tag) {
             return value.assign_to(field);
         }
         if table_tag(&tag).and_then(|t| alias::alias_of(table, t)) == Some(alias::DATA) {
@@ -765,7 +769,9 @@ impl AsciiRecord {
             rest.extend(field.to_bytes()?);
         }
         let position = self.record_position();
-        let first = match self.fields.first_mut() {
+        // The fixed point runs on a copy of the first field, written back
+        // only if it changed: a record read keeps sharing its fields.
+        let mut first = match self.fields.first() {
             None => return Err(Error::index_out_of_range().with_position(position)),
             Some(AnyField::Binary(f)) => {
                 let position = Position {
@@ -774,14 +780,27 @@ impl AsciiRecord {
                 };
                 return Err(Error::concat_int_to_bytes().with_position(position));
             }
-            Some(AnyField::Text(f)) => f,
+            Some(AnyField::Text(f)) => f.clone(),
         };
+        let result = Self::fix_len(&mut first, &rest);
+        let first = AnyField::Text(first);
+        if self.fields.first() != Some(&first) {
+            if let Some(slot) = self.fields_mut().first_mut() {
+                *slot = first;
+            }
+        }
+        result
+    }
+
+    /// The LEN fixed point of `to_bytes` on `first`, the other fields being
+    /// `rest`.
+    fn fix_len(first: &mut Field, rest: &[u8]) -> Result<Vec<u8>> {
         first.set_value(0)?;
         let mut last_len = None;
         loop {
             let mut out = first.to_bytes()?;
             out.push(GS);
-            out.extend_from_slice(&rest);
+            out.extend_from_slice(rest);
             let len = u64::try_from(out.len()).unwrap_or(u64::MAX);
             first.set_value(len.saturating_add(1))?;
             if last_len == Some(out.len()) {
@@ -822,15 +841,20 @@ impl AsciiRecord {
     /// a duplicate replaces the first occurrence).
     pub(crate) fn replace_field(&mut self, field: AnyField) -> Result<&mut Self> {
         let tag = field.tag().clone();
-        self.fields.retain(|f| f.tag() != &tag);
+        self.fields_mut().retain(|f| f.tag() != &tag);
         self.add_field(field)
+    }
+
+    /// The fields, to change them: copied first if the origin shares them.
+    fn fields_mut(&mut self) -> &mut Vec<AnyField> {
+        Arc::make_mut(&mut self.fields)
     }
 
     /// Records what the parsing read, the fields being taken as they are now.
     pub(crate) fn set_origin(&mut self, segments: Vec<Bytes>, raw: Vec<RawField>) {
         self.origin = Some(Box::new(AsciiOrigin {
             segments,
-            fields: self.fields.clone(),
+            fields: Arc::clone(&self.fields),
             raw,
         }));
     }
@@ -845,12 +869,15 @@ impl AsciiRecord {
         let Some(origin) = self.origin() else {
             return false;
         };
+        if Arc::ptr_eq(&self.fields, &origin.fields) {
+            return true;
+        }
         let cnt = self.cnt_index();
         self.fields.len() == origin.fields.len()
             && self
                 .fields
                 .iter()
-                .zip(&origin.fields)
+                .zip(origin.fields.iter())
                 .enumerate()
                 .all(|(i, (now, then))| {
                     if i == 0 || Some(i) == cnt {
@@ -958,7 +985,7 @@ impl AsciiRecord {
     pub(crate) fn untabled(record_type: u32) -> Self {
         AsciiRecord {
             record_type,
-            fields: Vec::new(),
+            fields: Arc::default(),
             autosort: true,
             origin: None,
             untabled: alias::table(record_type).is_none(),
