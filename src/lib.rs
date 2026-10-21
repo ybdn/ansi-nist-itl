@@ -200,6 +200,7 @@ pub mod codes;
 mod defaults;
 #[cfg(feature = "dictionary")]
 pub mod dictionary;
+pub mod encoding;
 mod error;
 mod field;
 pub mod image;

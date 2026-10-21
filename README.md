@@ -8,6 +8,8 @@ Rust library for reading and writing **ANSI/NIST-ITL** biometric transaction fil
 
 ## Features
 
+- Opt-in decoding of the character encoding declared in 1.015 (ASCII, Latin-1, UTF-8); text is
+  read as Latin-1 by default, as in `nistitl`.
 - Typed image metadata (dimensions, resolution, compression, finger positions) and the labels of
   the codes of the standard (IMP, FGP, compressions).
 - Parse and write tagged records (Types 1, 2, 9–22, 98, 99) and binary records (Types 3–8),

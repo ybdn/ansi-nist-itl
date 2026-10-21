@@ -134,6 +134,13 @@ pub enum ErrorKind {
     BadFormat,
     /// I/O error of the file and reader helpers; no Python equivalent.
     Io(std::io::ErrorKind),
+    /// Text that is not valid in the character encoding it is decoded
+    /// with (`encoding` module); no Python equivalent.
+    Decoding,
+    /// A character encoding the crate does not decode: its index in field
+    /// 1.015, or `None` for an `STX` switch sequence or an index out of
+    /// range (`encoding` module); no Python equivalent.
+    UnsupportedEncoding(Option<u32>),
 }
 
 /// Where an error occurred (LIB-11). Never part of [`Display`](fmt::Display).
