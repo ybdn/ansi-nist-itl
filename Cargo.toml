@@ -9,5 +9,15 @@ repository = "https://github.com/ybdn/ansi-nist-itl"
 readme = "README.md"
 keywords = ["nist", "biometrics", "fingerprint", "ansi-nist-itl", "parser"]
 categories = ["parser-implementations", "encoding"]
+exclude = ["/fuzz", "/tools", "/docs", "/.github"]
 
 [dependencies]
+chrono = { version = "0.4.38", default-features = false, features = ["clock"], optional = true }
+
+[dev-dependencies]
+proptest = { version = "1.5", default-features = false, features = ["std"] }
+
+[features]
+default = ["local-date"]
+# Today's date in local time, as `datetime.today()` (SPEC §8.1); UTC without it.
+local-date = ["dep:chrono"]

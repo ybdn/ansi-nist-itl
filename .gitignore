@@ -20,3 +20,10 @@ lcov.info
 
 # Environment
 .env
+
+# NIST files (DATA-01, DATA-04): real files hold biometric and personal
+# data. Synthetic ones must be forced in and listed in tests/data/ALLOWLIST.
+*.[nN][iI][sS][tT]
+*.[eE][fF][tT]
+*.[aA][nN]2
+*.[iI][nN][tT]

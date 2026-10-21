@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
 
 concurrency:
@@ -62,3 +62,65 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --no-deps --all-features
+
+  oracle:
+    name: Oracle (nistitl 0.6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install nistitl==0.6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Synthetic corpus (seed = run number)
+        run: python -I tools/oracle/gen_corpus.py "$RUNNER_TEMP/corpus" 20000 "$GITHUB_RUN_NUMBER"
+      - name: Compare with nistitl
+        run: cargo test --release --test oracle
+        env:
+          ANSI_NIST_ITL_CORPUS: ${{ runner.temp }}/corpus
+          ANSI_NIST_ITL_PYTHON: python
+
+  data:
+    name: Data files (DATA-04)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: tools/check-data-files.sh
+
+  fuzz:
+    name: Fuzz
+    runs-on: ubuntu-latest
+    env:
+      # cargo-fuzz sets its own flags; warnings of libFuzzer must not fail it.
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            fuzz
+      - name: Synthetic seed corpus
+        run: |
+          cargo run --example fuzz_seeds -- fuzz/corpus/parse
+          cargo run --example fuzz_seeds -- fuzz/corpus/exact
+          cargo run --example fuzz_seeds -- fuzz/corpus/parse_tolerant
+      - name: Fuzz for two minutes
+        # The prebuilt cargo-fuzz is a musl binary: its default target would be
+        # musl, which the sanitizers do not support.
+        run: cargo fuzz run parse --target x86_64-unknown-linux-gnu -- -max_total_time=120 -max_len=8192
+      - name: Fuzz the exact writing for one minute
+        run: cargo fuzz run exact --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
+      - name: Fuzz the tolerant mode for one minute
+        run: cargo fuzz run parse_tolerant --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts
