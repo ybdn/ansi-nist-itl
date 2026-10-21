@@ -6,6 +6,10 @@ All notable changes to this crate are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-21
+
+First release: parity with `nistitl` 0.6.
+
 ### Added
 
 - Python value model (`Scalar`, `PyInt`, `Value`, `Item`, `Kind`) and the conversions of
@@ -24,3 +28,6 @@ All notable changes to this crate are documented here. The format follows
   `Position` (record, tag, byte offset).
 - Oracle bench against `nistitl` 0.6, fuzz targets, property tests, guard against committing
   real NIST files.
+
+[Unreleased]: https://github.com/ybdn/ansi-nist-itl/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/ybdn/ansi-nist-itl/releases/tag/v0.1.0
