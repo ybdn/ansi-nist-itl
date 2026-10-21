@@ -8,6 +8,9 @@ All notable changes to this crate are documented here. The format follows
 
 ### Added
 
+- `image` module and `image_info()` on records: dimensions, resolution, compression, bits per
+  pixel, impression type and positions of image records, tagged or binary, without decoding
+  (LIB-20).
 - `dictionary` feature: the fields of each record type of ANSI/NIST-ITL 1-2011 Update 2015
   (mnemonic, name, format, condition, cardinality), generated from the layout tables of the
   standard (LIB-15).
