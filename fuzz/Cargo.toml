@@ -18,6 +18,13 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "exact"
+path = "fuzz_targets/exact.rs"
+test = false
+doc = false
+bench = false
+
 # Kept out of the workspace of the crate.
 [workspace]
 members = ["."]

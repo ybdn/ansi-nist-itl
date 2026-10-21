@@ -90,7 +90,7 @@ jobs:
       - run: tools/check-data-files.sh
 
   fuzz:
-    name: Fuzz (parse)
+    name: Fuzz
     runs-on: ubuntu-latest
     env:
       # cargo-fuzz sets its own flags; warnings of libFuzzer must not fail it.
@@ -107,11 +107,15 @@ jobs:
             .
             fuzz
       - name: Synthetic seed corpus
-        run: cargo run --example fuzz_seeds -- fuzz/corpus/parse
+        run: |
+          cargo run --example fuzz_seeds -- fuzz/corpus/parse
+          cargo run --example fuzz_seeds -- fuzz/corpus/exact
       - name: Fuzz for two minutes
         # The prebuilt cargo-fuzz is a musl binary: its default target would be
         # musl, which the sanitizers do not support.
         run: cargo fuzz run parse --target x86_64-unknown-linux-gnu -- -max_total_time=120 -max_len=8192
+      - name: Fuzz the exact writing for one minute
+        run: cargo fuzz run exact --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

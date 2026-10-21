@@ -7,7 +7,7 @@ use crate::bytes::Bytes;
 use crate::error::{Error, ErrorKind, Position, Result, Warning};
 use crate::field::{AnyField, BinaryField, Field};
 use crate::py::{decode_latin1, py_int};
-use crate::record::{AsciiRecord, BinaryRecord, FieldKey, Record};
+use crate::record::{AsciiRecord, BinaryRecord, FieldKey, RawField, Record};
 use crate::subfield::SubField;
 #[cfg(test)]
 use crate::value::Value;
@@ -284,6 +284,9 @@ struct Parser {
     /// Characters of a text CNT, indexed by the binary records; dropped
     /// whenever the Type-1 is read again.
     cnt_chars: Option<Vec<char>>,
+    /// For each record, the bytes read and the bytes of its fields
+    /// (SPEC §13.1).
+    origins: Vec<(Vec<Bytes>, Vec<RawField>)>,
 }
 
 impl Parser {
@@ -295,16 +298,26 @@ impl Parser {
             last_tagged: None,
             data_search: None,
             cnt_chars: None,
+            origins: vec![(Vec::new(), Vec::new())],
         };
         // `reset(autocreate=False)`: an empty Type-1.
         parser
             .records
             .push(Record::Ascii(AsciiRecord::with(1, false, true)?));
         parser.parse()?;
-        let message = Message {
-            records: parser.records,
+        let mut records = parser.records;
+        for (record, (segments, raw)) in records.iter_mut().zip(parser.origins) {
+            match record {
+                Record::Ascii(r) => r.set_origin(segments, raw),
+                Record::Binary(r) => r.set_origin(segments.into_iter().next().unwrap_or_default()),
+            }
+        }
+        let mut message = Message {
+            records,
+            layout: None,
         };
         check_cnt(&message)?;
+        message.layout = Some(message.layout_now());
         Ok((message, parser.warnings))
     }
 
@@ -389,6 +402,7 @@ impl Parser {
             .buffer
             .slice(offset..offset + length)
             .unwrap_or_default();
+        let segment = record_buffer.clone();
         let pos = data_label.as_ref().and_then(|l| find(&record_buffer, l, 0));
 
         match pos {
@@ -422,8 +436,20 @@ impl Parser {
                 let located = |e| locate(e, Some(index), Some(record_type), Some(offset + pos));
                 if let (Some(tag), Some(Record::Ascii(r))) = (data_tag, self.records.get_mut(index))
                 {
-                    let field = BinaryField::new(record_type, tag, data).map_err(located)?;
+                    let field =
+                        BinaryField::new(record_type, tag, data.clone()).map_err(located)?;
                     r.add_field(field).map_err(located)?;
+                    let label = self
+                        .buffer
+                        .slice(offset + header_start..offset + pos + 4)
+                        .unwrap_or_default();
+                    if let Some((_, raw)) = self.origins.get_mut(index) {
+                        raw.push(RawField {
+                            tag: PyInt::from(tag),
+                            label,
+                            content: data,
+                        });
+                    }
                 }
             }
             _ if record_type == 1 => {
@@ -435,6 +461,14 @@ impl Parser {
                 self.push(record, offset)?;
                 self.lex_into(index, &record_buffer, offset, future.clone())?;
             }
+        }
+        let target = if pos.is_some_and(|p| p > 0) || record_type != 1 {
+            index
+        } else {
+            0
+        };
+        if let Some((segments, _)) = self.origins.get_mut(target) {
+            segments.push(segment);
         }
         match future {
             Some(e) => Err(e),
@@ -465,6 +499,7 @@ impl Parser {
             ));
         }
         self.records.push(record);
+        self.origins.push((Vec::new(), Vec::new()));
         Ok(())
     }
 
@@ -482,7 +517,8 @@ impl Parser {
         };
         let record_type = record.record_type();
         let mut parser = TextParser::new(record);
-        if let Err(e) = lex(text, offset, &mut parser) {
+        let mut spans = Vec::new();
+        if let Err(e) = lex(text, offset, &mut parser, &mut spans) {
             let e = locate(e, Some(index), Some(record_type), None);
             return Err(match (future, e.kind()) {
                 (Some(future), ErrorKind::Nist(_)) => future.with_source(e),
@@ -498,6 +534,20 @@ impl Parser {
                     Some(offset),
                 )
             }));
+        }
+        let buffer = &self.buffer;
+        let raw = spans.into_iter().filter_map(|(start, label_end, end)| {
+            let label = buffer.slice(start..label_end)?;
+            let text = decode_latin1(&label);
+            let (_, tag) = match_tag_begin(&text)?;
+            Some(RawField {
+                tag: py_int(tag).ok()?,
+                label,
+                content: buffer.slice(label_end..end)?,
+            })
+        });
+        if let Some((_, fields)) = self.origins.get_mut(index) {
+            fields.extend(raw);
         }
         Ok(())
     }
@@ -542,6 +592,13 @@ impl Parser {
             }
         }
         self.push(record, offset)?;
+        let segment = self
+            .buffer
+            .slice(offset..offset + length)
+            .unwrap_or_default();
+        if let Some((segments, _)) = self.origins.last_mut() {
+            segments.push(segment);
+        }
         Ok(length)
     }
 

@@ -3,10 +3,12 @@
 mod ascii;
 mod binary;
 
+pub(crate) use ascii::RawField;
 pub use ascii::{AsciiRecord, FieldKey};
 pub use binary::BinaryRecord;
 
 use crate::alias;
+use crate::bytes::Bytes;
 use crate::error::Result;
 use crate::value::Value;
 
@@ -165,6 +167,38 @@ impl Record {
         match self {
             Record::Binary(r) => Some(r),
             Record::Ascii(_) => None,
+        }
+    }
+
+    /// The bytes the parsing read, in order; empty for a record built.
+    pub(crate) fn segments(&self) -> &[Bytes] {
+        match self {
+            Record::Ascii(r) => r.origin().map_or(&[], |o| &o.segments),
+            Record::Binary(r) => r.origin().map_or(&[], |o| std::slice::from_ref(&o.segment)),
+        }
+    }
+
+    /// IDC as the CNT describes it, for the exact writing.
+    pub(crate) fn layout_idc(&self) -> Option<Value> {
+        match self {
+            Record::Ascii(r) => r.layout_idc(),
+            Record::Binary(r) => Some(Value::from(u32::from(r.idc()))),
+        }
+    }
+
+    /// `true` if the record was read and has not changed since.
+    pub(crate) fn is_unchanged(&self) -> bool {
+        match self {
+            Record::Ascii(r) => r.is_unchanged(),
+            Record::Binary(r) => r.is_unchanged(),
+        }
+    }
+
+    /// Bytes of a changed record for the exact writing (SPEC §13.1).
+    pub(crate) fn exact_bytes(&self, cnt_rebuilt: bool) -> Result<Vec<u8>> {
+        match self {
+            Record::Ascii(r) => r.exact_bytes(cnt_rebuilt),
+            Record::Binary(r) => r.to_bytes(),
         }
     }
 

@@ -66,3 +66,38 @@ fn same_json_as_nistitl() {
             .join("\n")
     );
 }
+
+/// `to_bytes_exact` gives back every buffer that `parse` accepts, before and
+/// after `to_bytes` and `summary` (SPEC §13.1, QA-03).
+#[test]
+fn exact_round_trip() {
+    let Some(corpus) = std::env::var_os("ANSI_NIST_ITL_CORPUS") else {
+        eprintln!("ANSI_NIST_ITL_CORPUS is not set: exact round trip skipped");
+        return;
+    };
+    let mut files = Vec::new();
+    oracle_dump::files(Path::new(&corpus), &mut files).expect("readable corpus");
+    let mut failures = Vec::new();
+    let mut accepted = 0;
+    for path in &files {
+        let buffer = std::fs::read(path).expect("readable file");
+        let Ok(mut msg) = ansi_nist_itl::Message::parse(&buffer) else {
+            continue;
+        };
+        accepted += 1;
+        let before = msg.to_bytes_exact();
+        let _ = msg.to_bytes();
+        let _ = msg.summary();
+        let after = msg.to_bytes_exact();
+        if before.as_deref().ok() != Some(&buffer[..]) || after.as_deref().ok() != Some(&buffer[..])
+        {
+            failures.push(path.display().to_string());
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} of {accepted} accepted files not written back exactly: {:?}",
+        failures.len(),
+        &failures[..failures.len().min(10)]
+    );
+}
