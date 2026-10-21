@@ -20,7 +20,11 @@ fn defaults() -> Defaults {
 fn tagged(record_type: u32, idc: u32) -> Result<AsciiRecord> {
     let mut r = AsciiRecord::new(record_type)?;
     r.set("IDC", idc)?;
-    r.add_field(Field::new(record_type, 20, vec![vec!["a", "b"], vec!["c"]])?)?;
+    r.add_field(Field::new(
+        record_type,
+        20,
+        vec![vec!["a", "b"], vec!["c"]],
+    )?)?;
     r.add_field(Field::new(record_type, 21, "\u{e9}t\u{e9}")?)?;
     if [10, 13, 14, 15, 16, 17, 19, 20, 21, 22, 99].contains(&record_type) {
         r.set_bytes("DATA", vec![0xFF, 0xA0, 0x1C, 0x1D, 0x00, 0x01])?;
