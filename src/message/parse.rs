@@ -192,12 +192,20 @@ fn locate(
 /// `bytes.find(needle, start)`.
 fn find(haystack: &[u8], needle: &[u8], start: usize) -> Option<usize> {
     let rest = haystack.get(start..)?;
-    if needle.is_empty() {
+    let Some((&first, tail)) = needle.split_first() else {
         return Some(start);
+    };
+    // Scan for the first byte, then compare the rest: a byte search is much
+    // faster than comparing a window at every position.
+    let mut from = 0;
+    while let Some(p) = rest.get(from..)?.iter().position(|&b| b == first) {
+        let at = from + p;
+        if rest.get(at + 1..at + needle.len()) == Some(tail) {
+            return Some(start + at);
+        }
+        from = at + 1;
     }
-    rest.windows(needle.len())
-        .position(|w| w == needle)
-        .map(|i| i + start)
+    None
 }
 
 fn to_u32(n: &PyInt) -> Option<u32> {

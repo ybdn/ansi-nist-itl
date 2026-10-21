@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-ansi-nist-itl = { path = ".." }
+ansi-nist-itl = { path = "..", features = ["validation"] }
 
 [[bin]]
 name = "parse"

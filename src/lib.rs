@@ -78,6 +78,25 @@
 //! also carries a [`Position`]: record, tag, byte offset. The crate never
 //! panics on its input, which is fuzzed.
 //!
+//! # Versions
+//!
+//! As `nistitl`, the crate never reads the version of the standard (1.002,
+//! kept as text): every version is read and written the same way, the
+//! traditional ones (0200 to 0500) as the later ones. No rule depends on the
+//! version: a record type is accepted whatever the version declares, and
+//! Types 3, 5 and 6 give a [`Warning::Deprecated`] in every version.
+//!
+//! ```
+//! use ansi_nist_itl::{Message, Value};
+//!
+//! let mut msg = Message::new();
+//! msg.type1_mut().unwrap().set("VER", "0200")?;
+//! let bytes = msg.to_bytes()?;
+//! let read = Message::parse(&bytes)?;
+//! assert_eq!(read.type1().unwrap().get("VER")?, Value::from("0200"));
+//! # Ok::<(), ansi_nist_itl::Error>(())
+//! ```
+//!
 //! # Exact writing
 //!
 //! `nistitl` sorts fields, writes labels on 3 digits and recomputes LEN and
@@ -109,11 +128,69 @@
 //! # Ok::<(), ansi_nist_itl::Error>(())
 //! ```
 //!
+//! # Serialization
+//!
+//! With the `serde` feature, the model implements `Serialize` and
+//! `Deserialize`, in a stable form: values as Python shows them, binary data
+//! in base64 in human-readable formats (raw bytes in the others). Reading
+//! goes through the API, with the same checks and the same messages.
+//!
+//! ```
+//! # #[cfg(feature = "serde")] {
+//! use ansi_nist_itl::{AsciiRecord, Message};
+//! use serde_json::json;
+//!
+//! let mut r2 = AsciiRecord::new(2)?;
+//! r2.set("IDC", 1)?;
+//! r2.set("_18", vec![vec!["DOE", "JOHN"]])?;
+//! assert_eq!(
+//!     serde_json::to_value(&r2).unwrap(),
+//!     json!({ "type": 2, "fields": [
+//!         { "tag": 1, "alias": "LEN", "value": 0 },
+//!         { "tag": 2, "alias": "IDC", "value": 1 },
+//!         { "tag": 18, "value": [["DOE", "JOHN"]] },
+//!     ] })
+//! );
+//!
+//! let json = json!({ "records": [{ "type": 1, "fields": [] }, { "type": 1, "fields": [] }] });
+//! let err = serde_json::from_value::<Message>(json).unwrap_err();
+//! assert_eq!(
+//!     err.to_string(),
+//!     "CANNOT_ADD_TYPE1: Cannot add a type 1 record: it must be the first record"
+//! );
+//! # }
+//! # Ok::<(), ansi_nist_itl::Error>(())
+//! ```
+//!
+//! | Rust | JSON |
+//! |------|------|
+//! | `None`, booleans, text | `null`, `true`/`false`, string |
+//! | [`PyInt`] | number if it fits in `i64`, else `{"int": "-123…"}` |
+//! | lists ([`Value`], [`ListElem`], [`Item`]) | nested arrays |
+//! | [`Kind`] | `"FSI"`, `"SI"`… |
+//! | [`Bytes`] | base64 (RFC 4648, padded) |
+//! | text field | `{"tag", "alias"?, "kind"?, "format"?, "value"}` |
+//! | binary field | `{"tag", "alias"?, "format"?, "bytes"}` |
+//! | tagged record | `{"type", "autosort"?, "fields"}` |
+//! | binary record | `{"type", "idc", "format"?, "bytes"}` |
+//! | message | `{"records"}`, the Type-1 first |
+//!
+//! Optional keys are left out at their default: no alias, kind `FSI` (`SI`
+//! for a lone [`SubField`]), format `%d.%03d:`, `autosort` true. A lone
+//! field also carries its `record`. Unknown keys are refused. The bytes
+//! read for [`Message::to_bytes_exact`] are not serialized.
+//!
 //! # Features
 //!
 //! - `local-date` (default): today's date of a new Type-1 is the local date,
 //!   as `nistitl` gives it; without it, the UTC date. [`Defaults`] fixes the
 //!   date and the transaction control number.
+//! - `serde`: `Serialize` and `Deserialize` on the model (see above).
+//! - `dictionary`: the `dictionary` module, the fields of
+//!   each record type, after ANSI/NIST-ITL 1-2011 Update 2015.
+//! - `validation` (implies `dictionary`): the `validation` module,
+//!   `Message::validate` against the tables of the standard, and
+//!   `Message::validate_profile` against FBI EBTS 11.2 or INTERPOL INT-I 5.03.
 //!
 //! Image decoding (WSQ, JPEG 2000) is out of scope.
 
@@ -122,14 +199,23 @@
 
 pub mod alias;
 mod bytes;
+pub mod codes;
 mod defaults;
+#[cfg(feature = "dictionary")]
+pub mod dictionary;
+pub mod encoding;
 mod error;
 mod field;
+pub mod image;
 mod message;
 mod py;
 mod record;
+#[cfg(feature = "serde")]
+mod serde_impl;
 mod structfmt;
 mod subfield;
+#[cfg(feature = "validation")]
+pub mod validation;
 mod value;
 
 pub use bytes::Bytes;
@@ -143,6 +229,12 @@ pub use record::{AsciiRecord, BinaryRecord, FieldKey, ImageHeader, Record, Signa
 pub use structfmt::StructValue;
 pub use subfield::SubField;
 pub use value::{Item, Kind, ListElem, PyInt, Scalar, SubValue, Value};
+
+// The Rust examples of the README compile (they need the `validation`
+// feature).
+#[cfg(all(doctest, feature = "validation"))]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;
 
 /// File separator (`0x1C`): ends a tagged record.
 pub const FS: u8 = 0x1C;

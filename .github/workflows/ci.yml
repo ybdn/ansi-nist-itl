@@ -30,6 +30,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-targets
       - run: cargo test --doc
+      - run: cargo test --all-targets --all-features
+      - run: cargo test --doc --all-features
 
   msrv:
     name: MSRV (1.85)
@@ -51,6 +53,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --all-targets --all-features -- -D warnings
+
+  bench:
+    name: Benchmarks (build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo bench --no-run
 
   doc:
     name: Documentation

@@ -1,23 +1,45 @@
 [package]
 name = "ansi-nist-itl"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
-description = "Parser and writer for ANSI/NIST-ITL biometric transaction files"
+description = "Read, write and validate ANSI/NIST-ITL biometric files (NIST, EBTS, INT-I), byte for byte compatible with nistitl"
 license = "CECILL-C"
 repository = "https://github.com/ybdn/ansi-nist-itl"
+documentation = "https://docs.rs/ansi-nist-itl"
 readme = "README.md"
-keywords = ["nist", "biometrics", "fingerprint", "ansi-nist-itl", "parser"]
+keywords = ["nist", "biometrics", "fingerprint", "ansi-nist-itl", "ebts"]
 categories = ["parser-implementations", "encoding"]
 exclude = ["/fuzz", "/tools", "/docs", "/.github"]
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 chrono = { version = "0.4.38", default-features = false, features = ["clock"], optional = true }
+serde = { version = "1.0.200", features = ["derive"], optional = true }
 
 [dev-dependencies]
+# 0.7: the last version for Rust 1.85 (QA-07).
+criterion = { version = "0.7", default-features = false, features = ["cargo_bench_support"] }
 proptest = { version = "1.5", default-features = false, features = ["std"] }
+serde_json = "1.0"
+
+[[example]]
+name = "inspect"
+required-features = ["validation"]
+
+[[bench]]
+name = "message"
+harness = false
 
 [features]
 default = ["local-date"]
 # Today's date in local time, as `datetime.today()` (SPEC §8.1); UTC without it.
 local-date = ["dep:chrono"]
+# Serialize and Deserialize on the model (SPEC §13.4).
+serde = ["dep:serde"]
+# Field dictionary of the standard (SPEC §13.6).
+dictionary = []
+# Validation against the standard (SPEC §13.9).
+validation = ["dictionary"]

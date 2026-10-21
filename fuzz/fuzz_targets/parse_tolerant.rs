@@ -16,6 +16,13 @@ fuzz_target!(|data: &[u8]| {
     }
     assert_eq!(parsed.message.to_bytes_exact().ok().as_deref(), Some(data));
     let mut message = parsed.message;
+    for record in message.records() {
+        let _ = record.image_info();
+    }
+    let _ = message.validate_against(ansi_nist_itl::dictionary::Standard::Update2015);
+    for profile in [ansi_nist_itl::validation::Profile::Ebts112, ansi_nist_itl::validation::Profile::IntI503] {
+        let _ = message.validate_profile(profile);
+    }
     let _ = message.summary();
     let _ = message.to_bytes();
 });
