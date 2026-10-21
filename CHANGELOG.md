@@ -15,6 +15,10 @@ All notable changes to this crate are documented here. The format follows
 
 ### Documentation
 
+- README rewritten: comparison with `nistitl`, quick start, guarantees, performance; its Rust
+  examples compile as doctests. `examples/inspect.rs`: summary and validation of a file from the
+  command line. `CONTRIBUTING.md`, `SECURITY.md`, issue and pull request templates.
+
 - `docs/SPEED.md`: speed compared with `nistitl` on the same corpora (3 to 4 times faster on
   usual messages, equal on large images), with `examples/speed.rs`, `tools/bench/speed.py` and
   `tools/bench/gen_messages.py` to reproduce it.

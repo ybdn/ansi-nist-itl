@@ -230,6 +230,12 @@ pub use structfmt::StructValue;
 pub use subfield::SubField;
 pub use value::{Item, Kind, ListElem, PyInt, Scalar, SubValue, Value};
 
+// The Rust examples of the README compile (they need the `validation`
+// feature).
+#[cfg(all(doctest, feature = "validation"))]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;
+
 /// File separator (`0x1C`): ends a tagged record.
 pub const FS: u8 = 0x1C;
 /// Group separator (`0x1D`): separates the fields of a tagged record.
