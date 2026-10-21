@@ -1,5 +1,6 @@
 //! Messages: a Type-1 record followed by the other records (SPEC §10).
 
+mod exact;
 mod io;
 mod lexer;
 mod parse;
@@ -62,9 +63,29 @@ fn at_record(index: usize) -> impl Fn(Error) -> Error {
 /// assert_eq!(msg.cnt()?.to_bytes()?, b"1.003:1\x1f1\x1e2\x1f1");
 /// # Ok::<(), ansi_nist_itl::Error>(())
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct Message {
     records: Vec<Record>,
+    /// Type and IDC of each record as read, for the exact writing
+    /// (SPEC §13.1).
+    layout: Option<Vec<(u32, Option<Value>)>>,
+}
+
+impl PartialEq for Message {
+    /// Compares the records, not how they were read.
+    fn eq(&self, other: &Self) -> bool {
+        self.records == other.records
+    }
+}
+
+impl Eq for Message {}
+
+impl std::fmt::Debug for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Message")
+            .field("records", &self.records)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for Message {
@@ -103,6 +124,7 @@ impl Message {
     pub fn with_defaults(defaults: &Defaults) -> Self {
         let mut msg = Message {
             records: Vec::new(),
+            layout: None,
         };
         msg.reset_with(true, true, defaults);
         msg
@@ -131,6 +153,7 @@ impl Message {
         let type1 = AsciiRecord::with_defaults(1, autocreate, autosort, defaults)
             .or_else(|_| AsciiRecord::with(1, false, autosort));
         self.records = type1.map(Record::Ascii).into_iter().collect();
+        self.layout = None;
     }
 
     /// Adds a record at the end (`msg += record`). A Type-1 gives
@@ -493,37 +516,11 @@ impl Message {
     /// msg.set_cnt(12);
     /// ```
     pub fn cnt(&mut self) -> Result<&Field> {
-        let others = self.records.len().saturating_sub(1);
         let (first, rest) = self
             .records
             .split_first_mut()
             .ok_or_else(|| Error::index_out_of_range().with_position(Position::default()))?;
-        let field = match first {
-            Record::Ascii(r) => match r.field_mut(alias::CNT) {
-                Some(AnyField::Text(f)) => f,
-                Some(AnyField::Binary(_)) => {
-                    return Err(
-                        Error::no_attribute("BinaryField", "reset").with_position(cnt_position())
-                    );
-                }
-                None => return Err(Error::none_attribute("reset").with_position(cnt_position())),
-            },
-            Record::Binary(_) => {
-                return Err(Error::not_subscriptable("BinaryRecord").with_position(cnt_position()));
-            }
-        };
-        field.reset();
-        let count = u64::try_from(others).unwrap_or(u64::MAX);
-        add_cnt_entry(field, || Ok((Item::from(1), Item::from(count)))).map_err(at_record(0))?;
-        for (i, r) in rest.iter().enumerate() {
-            // `r.IDC` is read once the subfield is added: on error, the
-            // empty subfield stays, as in `nistitl`.
-            add_cnt_entry(field, || {
-                Ok((Item::from(r.record_type()), Item::from(r.idc()?)))
-            })
-            .map_err(at_record(i + 1))?;
-        }
-        Ok(field)
+        rebuild_cnt(first, rest)
     }
 
     /// Bytes of the message (`NIST`): the CNT is recomputed, then the
@@ -607,6 +604,37 @@ impl Message {
         let class = first.map_or("NoneType", Record::class_name);
         self.index_error(0, Error::no_attribute(class, attribute))
     }
+}
+
+/// `msg.CNT` (SPEC §10.5): rebuilds the CNT of `first` from the records
+/// that follow it.
+pub(crate) fn rebuild_cnt<'a>(first: &'a mut Record, rest: &[Record]) -> Result<&'a Field> {
+    let field = match first {
+        Record::Ascii(r) => match r.field_mut(alias::CNT) {
+            Some(AnyField::Text(f)) => f,
+            Some(AnyField::Binary(_)) => {
+                return Err(
+                    Error::no_attribute("BinaryField", "reset").with_position(cnt_position())
+                );
+            }
+            None => return Err(Error::none_attribute("reset").with_position(cnt_position())),
+        },
+        Record::Binary(_) => {
+            return Err(Error::not_subscriptable("BinaryRecord").with_position(cnt_position()));
+        }
+    };
+    field.reset();
+    let count = u64::try_from(rest.len()).unwrap_or(u64::MAX);
+    add_cnt_entry(field, || Ok((Item::from(1), Item::from(count)))).map_err(at_record(0))?;
+    for (i, r) in rest.iter().enumerate() {
+        // `r.IDC` is read once the subfield is added: on error, the empty
+        // subfield stays, as in `nistitl`.
+        add_cnt_entry(field, || {
+            Ok((Item::from(r.record_type()), Item::from(r.idc()?)))
+        })
+        .map_err(at_record(i + 1))?;
+    }
+    Ok(field)
 }
 
 fn cnt_position() -> Position {

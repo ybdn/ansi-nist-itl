@@ -468,6 +468,11 @@ impl Field {
         Ok(out)
     }
 
+    /// The label in Latin-1.
+    pub(crate) fn label_bytes(&self) -> Result<Vec<u8>> {
+        encode_latin1(&self.label()).map_err(|e| Error::from(e).with_position(self.position()))
+    }
+
     /// `format % (record, tag)`, such as `2.003:`.
     fn label(&self) -> String {
         self.format.render(&PyInt::from(self.record), &self.tag)
@@ -795,6 +800,21 @@ impl AnyField {
         match self {
             AnyField::Text(f) => f.to_bytes(),
             AnyField::Binary(f) => f.to_bytes(),
+        }
+    }
+}
+
+impl AnyField {
+    /// The bytes of the field after its label.
+    pub(crate) fn value_bytes(&self) -> Result<Vec<u8>> {
+        match self {
+            AnyField::Text(f) => {
+                let label = f.label_bytes()?.len();
+                let mut bytes = f.to_bytes()?;
+                bytes.drain(..label.min(bytes.len()));
+                Ok(bytes)
+            }
+            AnyField::Binary(f) => Ok(f.value().to_vec()),
         }
     }
 }

@@ -41,6 +41,11 @@ impl Bytes {
         Bytes::from(Arc::<[u8]>::from(Vec::new()))
     }
 
+    /// Offset of the view in its buffer.
+    pub(crate) fn offset(&self) -> usize {
+        self.start
+    }
+
     /// Sub-slice sharing the same buffer, or `None` if `range` is out of bounds.
     ///
     /// ```

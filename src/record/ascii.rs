@@ -138,6 +138,26 @@ fn summary_line(field: &AnyField) -> String {
     )
 }
 
+/// Same field, value aside.
+fn same_shape(a: &AnyField, b: &AnyField) -> bool {
+    match (a, b) {
+        (AnyField::Text(a), AnyField::Text(b)) => {
+            a.record() == b.record()
+                && a.tag() == b.tag()
+                && a.kind() == b.kind()
+                && a.format() == b.format()
+                && a.alias() == b.alias()
+        }
+        (AnyField::Binary(a), AnyField::Binary(b)) => {
+            a.record() == b.record()
+                && a.tag() == b.tag()
+                && a.format() == b.format()
+                && a.alias() == b.alias()
+        }
+        _ => false,
+    }
+}
+
 /// Tagged record (`AsciiRecord`): Types 1, 2, 9 to 22, 98 and 99.
 ///
 /// Fields are text ([`Field`]) or binary ([`BinaryField`]), each identified
@@ -154,11 +174,51 @@ fn summary_line(field: &AnyField) -> String {
 /// assert_eq!(r.to_bytes()?, b"10.001:40\x1d10.002:2\x1d10.999:my image data\x1c");
 /// # Ok::<(), ansi_nist_itl::Error>(())
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct AsciiRecord {
     record_type: u32,
     fields: Vec<AnyField>,
     autosort: bool,
+    /// What the parsing read, for the exact writing (SPEC §13.1).
+    origin: Option<Box<AsciiOrigin>>,
+}
+
+/// Bytes of a field as read, for the exact writing (SPEC §13.1).
+#[derive(Debug, Clone)]
+pub(crate) struct RawField {
+    pub(crate) tag: PyInt,
+    pub(crate) label: Bytes,
+    pub(crate) content: Bytes,
+}
+
+/// A tagged record as read: its bytes, its fields once read, and the bytes
+/// of each field.
+#[derive(Debug, Clone)]
+pub(crate) struct AsciiOrigin {
+    pub(crate) segments: Vec<Bytes>,
+    pub(crate) fields: Vec<AnyField>,
+    pub(crate) raw: Vec<RawField>,
+}
+
+impl PartialEq for AsciiRecord {
+    /// Compares the content, not how it was read.
+    fn eq(&self, other: &Self) -> bool {
+        self.record_type == other.record_type
+            && self.fields == other.fields
+            && self.autosort == other.autosort
+    }
+}
+
+impl Eq for AsciiRecord {}
+
+impl fmt::Debug for AsciiRecord {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AsciiRecord")
+            .field("record_type", &self.record_type)
+            .field("fields", &self.fields)
+            .field("autosort", &self.autosort)
+            .finish_non_exhaustive()
+    }
 }
 
 impl AsciiRecord {
@@ -228,6 +288,7 @@ impl AsciiRecord {
             record_type,
             fields: Vec::new(),
             autosort,
+            origin: None,
         };
         if !autocreate {
             return Ok(record);
@@ -752,6 +813,133 @@ impl AsciiRecord {
             .map(summary_line)
             .collect();
         lines.join("\n")
+    }
+
+    /// Records what the parsing read, the fields being taken as they are now.
+    pub(crate) fn set_origin(&mut self, segments: Vec<Bytes>, raw: Vec<RawField>) {
+        self.origin = Some(Box::new(AsciiOrigin {
+            segments,
+            fields: self.fields.clone(),
+            raw,
+        }));
+    }
+
+    pub(crate) fn origin(&self) -> Option<&AsciiOrigin> {
+        self.origin.as_deref()
+    }
+
+    /// `true` if the record was read and has not changed since, LEN and CNT
+    /// aside: `nistitl` recomputes them on write.
+    pub(crate) fn is_unchanged(&self) -> bool {
+        let Some(origin) = self.origin() else {
+            return false;
+        };
+        let cnt = self.cnt_index();
+        self.fields.len() == origin.fields.len()
+            && self
+                .fields
+                .iter()
+                .zip(&origin.fields)
+                .enumerate()
+                .all(|(i, (now, then))| {
+                    if i == 0 || Some(i) == cnt {
+                        same_shape(now, then)
+                    } else {
+                        now == then
+                    }
+                })
+    }
+
+    /// IDC as the CNT describes it, for the exact writing: an IDC in first
+    /// position takes the length of the record on write, which is not a
+    /// change, so it keeps its value as read.
+    pub(crate) fn layout_idc(&self) -> Option<Value> {
+        let i = self.fields.iter().position(|f| f.alias() == alias::IDC)?;
+        let now = self.fields.get(i)?;
+        let field = match (i, self.origin()) {
+            (0, Some(origin)) => origin
+                .fields
+                .first()
+                .filter(|then| same_shape(now, then))
+                .unwrap_or(now),
+            _ => now,
+        };
+        match field {
+            AnyField::Text(f) => Some(f.value()),
+            AnyField::Binary(_) => None,
+        }
+    }
+
+    /// Index of the CNT that `Message::cnt` rebuilds, in a Type-1.
+    fn cnt_index(&self) -> Option<usize> {
+        if self.record_type != 1 {
+            return None;
+        }
+        self.fields.iter().position(|f| f.alias() == alias::CNT)
+    }
+
+    /// Bytes of the record for `Message::to_bytes_exact` (SPEC §13.1): the
+    /// fields in their current order, each with the bytes read when it is
+    /// unchanged, its label as read otherwise; LEN recomputed. The CNT of a
+    /// Type-1 keeps its bytes unless `cnt_rebuilt`.
+    pub(crate) fn exact_bytes(&self, cnt_rebuilt: bool) -> Result<Vec<u8>> {
+        let origin = self.origin();
+        let raw_of = |tag: &PyInt| origin.and_then(|o| o.raw.iter().rev().find(|r| &r.tag == tag));
+        let read_of = |tag: &PyInt| origin.and_then(|o| o.fields.iter().find(|f| f.tag() == tag));
+        let cnt = self.cnt_index();
+        let mut rest = Vec::new();
+        for (i, field) in self.fields.iter().enumerate().skip(1) {
+            if i > 1 {
+                rest.push(GS);
+            }
+            let raw = raw_of(field.tag());
+            let unchanged = read_of(field.tag()).is_some_and(|then| {
+                then == field || (Some(i) == cnt && !cnt_rebuilt && same_shape(field, then))
+            });
+            match raw {
+                Some(raw) if unchanged => {
+                    rest.extend_from_slice(&raw.label);
+                    rest.extend_from_slice(&raw.content);
+                }
+                Some(raw) => {
+                    rest.extend_from_slice(&raw.label);
+                    rest.extend(field.value_bytes()?);
+                }
+                None => rest.extend(field.to_bytes()?),
+            }
+        }
+        let position = self.record_position();
+        let first = match self.fields.first() {
+            None => return Err(Error::index_out_of_range().with_position(position)),
+            Some(AnyField::Binary(f)) => {
+                return Err(
+                    Error::concat_int_to_bytes().with_position(self.field_position(f.tag()))
+                );
+            }
+            Some(AnyField::Text(f)) => f,
+        };
+        let label = match raw_of(first.tag()) {
+            Some(raw) => raw.label.to_vec(),
+            None => first.label_bytes()?,
+        };
+        // The fixed point of `to_bytes` (SPEC §8.8), without changing the
+        // record.
+        let mut length = 0usize;
+        let mut last = None;
+        loop {
+            let len = label.len() + length.to_string().len() + 1 + rest.len();
+            length = len + 1;
+            if last == Some(len) {
+                break;
+            }
+            last = Some(len);
+        }
+        let mut out = label;
+        out.extend_from_slice(length.to_string().as_bytes());
+        out.push(GS);
+        out.extend(rest);
+        out.push(FS);
+        Ok(out)
     }
 
     /// `ALIASES[type]`.

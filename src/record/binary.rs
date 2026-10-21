@@ -32,12 +32,45 @@ use crate::structfmt::{self, StructValue};
 /// let mut r = ansi_nist_itl::BinaryRecord::new(4);
 /// r.set_idc(300);
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct BinaryRecord {
     record_type: u32,
     idc: u8,
     value: Bytes,
     format: String,
+    /// What the parsing read, for the exact writing (SPEC §13.1).
+    origin: Option<Box<BinaryOrigin>>,
+}
+
+/// A binary record as read: its bytes, its IDC and its value.
+#[derive(Debug, Clone)]
+pub(crate) struct BinaryOrigin {
+    pub(crate) segment: Bytes,
+    idc: u8,
+    value: Bytes,
+}
+
+impl PartialEq for BinaryRecord {
+    /// Compares the content, not how it was read.
+    fn eq(&self, other: &Self) -> bool {
+        self.record_type == other.record_type
+            && self.idc == other.idc
+            && self.value == other.value
+            && self.format == other.format
+    }
+}
+
+impl Eq for BinaryRecord {}
+
+impl std::fmt::Debug for BinaryRecord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BinaryRecord")
+            .field("record_type", &self.record_type)
+            .field("idc", &self.idc)
+            .field("value", &self.value)
+            .field("format", &self.format)
+            .finish_non_exhaustive()
+    }
 }
 
 impl BinaryRecord {
@@ -56,6 +89,7 @@ impl BinaryRecord {
             idc: 1,
             value: Bytes::new(),
             format: String::new(),
+            origin: None,
         }
     }
 
@@ -288,6 +322,26 @@ impl BinaryRecord {
             lines.extend(values.iter().map(|v| format!("        {blank}-> {v}")));
         }
         Ok(lines.join("\n"))
+    }
+
+    /// Records the bytes the parsing read, the IDC and value being taken as
+    /// they are now.
+    pub(crate) fn set_origin(&mut self, segment: Bytes) {
+        self.origin = Some(Box::new(BinaryOrigin {
+            segment,
+            idc: self.idc,
+            value: self.value.clone(),
+        }));
+    }
+
+    pub(crate) fn origin(&self) -> Option<&BinaryOrigin> {
+        self.origin.as_deref()
+    }
+
+    /// `true` if the record was read and has not changed since.
+    pub(crate) fn is_unchanged(&self) -> bool {
+        self.origin()
+            .is_some_and(|o| o.idc == self.idc && o.value == self.value)
     }
 
     fn position(&self) -> Position {
