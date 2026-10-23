@@ -6,12 +6,15 @@ All notable changes to this crate are documented here. The format follows
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-10-21
-
 ### Changed
 
 - `NistError` and `Position` are `#[non_exhaustive]`, like the other error and diagnostic types:
   a code or a location detail can be added after 1.0 without a breaking change.
+
+## [0.2.0] - 2026-10-21
+
+### Changed
+
 - Faster reading and exact writing, same output: `parse` 1.5× (4 KiB) to 5.7× (8 MiB),
   `to_bytes_exact` 22× to 31× on the benchmarks. Byte search no longer compares a window at every
   position; a record read shares its fields with what it remembers for the exact writing until
