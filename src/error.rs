@@ -24,6 +24,7 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
+#[non_exhaustive]
 pub enum NistError {
     /// `BAD_RECORD`: a field of a tagged record cannot be split.
     BadRecord = 1,
@@ -152,6 +153,7 @@ pub enum ErrorKind {
 /// assert_eq!(p.offset, None);
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Position {
     /// Index of the record in the message (Type-1 = 0).
     pub record_index: Option<usize>,
