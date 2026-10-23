@@ -39,8 +39,7 @@ validation against the standard and against the FBI and INTERPOL profiles.
 
 ```toml
 [dependencies]
-# Until the first release on crates.io:
-ansi-nist-itl = { git = "https://github.com/ybdn/ansi-nist-itl", features = ["validation"] }
+ansi-nist-itl = { version = "1", features = ["validation"] }
 ```
 
 Read a transaction and list its fingerprints:
