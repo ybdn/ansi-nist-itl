@@ -6,6 +6,11 @@ All notable changes to this crate are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `NistError` and `Position` are `#[non_exhaustive]`, like the other error and diagnostic types:
+  a code or a location detail can be added after 1.0 without a breaking change.
+
 ## [0.2.0] - 2026-10-21
 
 ### Changed
