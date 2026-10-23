@@ -6,6 +6,20 @@ All notable changes to this crate are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-23
+
+Stable API: no breaking change before 2.0.
+
+### Changed
+
+- README: installation from crates.io.
+- `NistError` and `Position` are `#[non_exhaustive]`, like the other error and diagnostic types:
+  a code or a location detail can be added after 1.0 without a breaking change.
+
+### Documentation
+
+- Every public item has a runnable example, the generated methods of the `codes` enums included.
+
 ## [0.2.0] - 2026-10-21
 
 ### Changed
@@ -75,6 +89,7 @@ First release: parity with `nistitl` 0.6.
 - Oracle bench against `nistitl` 0.6, fuzz targets, property tests, guard against committing
   real NIST files.
 
-[Unreleased]: https://github.com/ybdn/ansi-nist-itl/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ybdn/ansi-nist-itl/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/ybdn/ansi-nist-itl/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/ybdn/ansi-nist-itl/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ybdn/ansi-nist-itl/releases/tag/v0.1.0

@@ -1,5 +1,7 @@
 # ansi-nist-itl
 
+[![crates.io](https://img.shields.io/crates/v/ansi-nist-itl.svg)](https://crates.io/crates/ansi-nist-itl)
+[![docs.rs](https://img.shields.io/docsrs/ansi-nist-itl)](https://docs.rs/ansi-nist-itl)
 [![CI](https://github.com/ybdn/ansi-nist-itl/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/ybdn/ansi-nist-itl/actions/workflows/ci.yml)
 [![License: CeCILL-C](https://img.shields.io/badge/license-CeCILL--C-blue.svg)](LICENSE)
 [![MSRV 1.85](https://img.shields.io/badge/MSRV-1.85-orange.svg)](Cargo.toml)
@@ -37,8 +39,7 @@ validation against the standard and against the FBI and INTERPOL profiles.
 
 ```toml
 [dependencies]
-# Until the first release on crates.io:
-ansi-nist-itl = { git = "https://github.com/ybdn/ansi-nist-itl", features = ["validation"] }
+ansi-nist-itl = { version = "1", features = ["validation"] }
 ```
 
 Read a transaction and list its fingerprints:

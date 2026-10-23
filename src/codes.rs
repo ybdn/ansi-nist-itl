@@ -41,6 +41,14 @@ macro_rules! code_enum {
             pub const ALL: &'static [$name] = &[$($name::$variant),*];
 
             /// The value of a code, if the table has it.
+            ///
+            /// ```
+            #[doc = concat!("use ansi_nist_itl::codes::", stringify!($name), ";")]
+            ///
+            #[doc = concat!("let first = ", stringify!($name), "::ALL[0];")]
+            #[doc = concat!("assert_eq!(", stringify!($name), "::from_code(first.code()), Some(first));")]
+            #[doc = concat!("assert_eq!(", stringify!($name), "::from_code(255), None);")]
+            /// ```
             pub fn from_code(code: u8) -> Option<Self> {
                 match code {
                     $($code => Some($name::$variant),)*
@@ -49,6 +57,14 @@ macro_rules! code_enum {
             }
 
             /// Numeric code.
+            ///
+            /// ```
+            #[doc = concat!("use ansi_nist_itl::codes::", stringify!($name), ";")]
+            ///
+            #[doc = concat!("for value in ", stringify!($name), "::ALL {")]
+            #[doc = concat!("    assert_eq!(", stringify!($name), "::try_from(value.code()), Ok(*value));")]
+            /// }
+            /// ```
             pub fn code(self) -> u8 {
                 match self {
                     $($name::$variant => $code,)*
@@ -56,6 +72,13 @@ macro_rules! code_enum {
             }
 
             /// Label of the standard.
+            ///
+            /// ```
+            #[doc = concat!("use ansi_nist_itl::codes::", stringify!($name), ";")]
+            ///
+            #[doc = concat!("let first = ", stringify!($name), "::ALL[0];")]
+            /// assert_eq!(first.label(), first.to_string());
+            /// ```
             pub fn label(self) -> &'static str {
                 match self {
                     $($name::$variant => $label,)*
