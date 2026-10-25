@@ -468,7 +468,8 @@ impl Validator {
         for def in standard.fields(t) {
             let mandatory = def.condition == Condition::Mandatory
                 && def.kind != FieldKind::Header
-                && matches!(def.occurrence, Some(Occurrence { min: Limit::Count(n), .. }) if n > 0);
+                && matches!(def.occurrence, Some(Occurrence { min: Limit::Count(n), .. }) if n > 0)
+                && block_in_use(r, t, def.tag);
             if mandatory && r.field(def.tag).is_none() {
                 let name = if def.mnemonic.is_empty() {
                     def.name
@@ -799,9 +800,77 @@ fn days_in_month(year: u32, month: u32) -> u32 {
     }
 }
 
+/// Blocks of the Type-9 whose fields are mandatory only when the block is
+/// used ("M⇑" in Table 30 of ANSI/NIST-ITL 1-2011, update 2015): the
+/// INCITS 378 feature set, the other feature sets and the extended
+/// feature set (EFS). A Type-9 holds any of them, or none.
+const TYPE9_BLOCKS: [(u32, u32); 3] = [(126, 140), (176, 225), (300, 399)];
+
+/// Whether the mandatory field `tag` of a record of type `t` applies: it
+/// does, unless it belongs to an optional block of which the record has
+/// no field.
+fn block_in_use(record: &AsciiRecord, t: u32, tag: u32) -> bool {
+    if t != 9 {
+        return true;
+    }
+    let Some(&(first, last)) = TYPE9_BLOCKS
+        .iter()
+        .find(|(first, last)| (*first..=*last).contains(&tag))
+    else {
+        return true;
+    };
+    record.fields().iter().any(|f| {
+        f.tag()
+            .to_i64()
+            .is_some_and(|n| (i64::from(first)..=i64::from(last)).contains(&n))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Mandatory fields reported missing on the Type-9 of a message
+    /// holding the fields `tags` (with values `1`).
+    fn missing_in_type9(tags: &[u32]) -> Vec<String> {
+        let mut msg = Message::with_defaults(&crate::Defaults {
+            date: Some("20240101".into()),
+            tcn: Some("T".into()),
+        });
+        let mut r9 = AsciiRecord::new(9).unwrap();
+        r9.set("IDC", 1).unwrap();
+        r9.add_field(crate::Field::new(9, 3u32, "0").unwrap())
+            .unwrap();
+        r9.add_field(crate::Field::new(9, 4u32, "U").unwrap())
+            .unwrap();
+        for &tag in tags {
+            r9.add_field(crate::Field::new(9, tag, "1").unwrap())
+                .unwrap();
+        }
+        msg.push(r9).unwrap();
+        msg.validate_against(Standard::Update2015)
+            .findings
+            .iter()
+            .filter(|f| f.rule == Rule::MissingField && f.message.contains("mandatory field"))
+            .map(|f| f.message.clone())
+            .filter(|m| ["CBI", "OOD", "ROI", "FPP"].iter().any(|n| m.contains(n)))
+            .collect()
+    }
+
+    #[test]
+    fn type9_blocks_are_mandatory_only_when_used() {
+        // No block: none of their fields is required.
+        assert_eq!(missing_in_type9(&[]), Vec::<String>::new());
+        // EFS used (EFS minutiae): ROI and FPP required, not the others.
+        let efs = missing_in_type9(&[331]);
+        assert!(efs.iter().any(|m| m.contains("ROI")) && efs.iter().any(|m| m.contains("FPP")));
+        assert!(!efs.iter().any(|m| m.contains("CBI") || m.contains("OOD")));
+        // INCITS 378 block used: CBI required.
+        let m1 = missing_in_type9(&[137]);
+        assert!(m1.iter().any(|m| m.contains("CBI")) && !m1.iter().any(|m| m.contains("ROI")));
+        // Other feature sets: OOD required.
+        assert!(missing_in_type9(&[177]).iter().any(|m| m.contains("OOD")));
+    }
 
     #[test]
     fn dates() {
