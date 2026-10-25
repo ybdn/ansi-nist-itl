@@ -6,6 +6,13 @@ All notable changes to this crate are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Validation of the Type-9: the fields of the INCITS 378 block (9.126–9.140), of the other
+  feature sets (9.176–9.225) and of the extended feature set (9.300–9.399) are mandatory only
+  when their block is used ("M⇑" in Table 30), instead of always. A Type-9 holding one block, or
+  none, no longer reports the mandatory fields of the others.
+
 ## [1.0.0] - 2026-10-23
 
 Stable API: no breaking change before 2.0.
