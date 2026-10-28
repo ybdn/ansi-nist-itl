@@ -18,7 +18,9 @@ compare the two on whole corpora (SPEC §15.3, §15.5; QA-02, QA-03, QA-04).
 CPython 3.12.16 with `nistitl` 0.6 (`pip install nistitl==0.6`, identical to the
 reference), or `NISTITL_PATH` naming the directory of `nistitl.py`.
 `ANSI_NIST_ITL_PYTHON` names the interpreter (default `python3`). CI installs the
-pinned interpreter with uv 0.13.6 instead of using Debian's system Python.
+pinned interpreter with uv 0.13.6 instead of using Debian's system Python;
+uv and `nistitl` are installed with `--require-hashes`, and uv checks the CPython
+archive against the SHA-256 recorded in its release metadata.
 Exception messages are compared verbatim: Python 3.11 reports `min() arg is an
 empty sequence`, whereas the reference reports `min() iterable argument is empty`.
 Do not normalize these differences or change the Rust public errors to fit the runner.
