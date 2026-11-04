@@ -128,6 +128,28 @@ examples.
 | `validation` | no | `Message::validate` against the tables of the standard (implies `dictionary`); `validate_profile` against FBI EBTS 11.2 and INTERPOL INT-I 5.03 |
 | `serde` | no | `Serialize` / `Deserialize` on the model, in a stable form (binary data in base64 for JSON) |
 
+## Decoding a WSQ image
+
+This crate reads records; it does not decode images. Field 999 of a Type-14 holds a WSQ stream:
+to decode it, the application adds its own dependency on
+[`wsq-codec`](https://crates.io/crates/wsq-codec), which is not a dependency of this crate.
+
+```rust,ignore
+use ansi_nist_itl::Message;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let msg = Message::from_path("transaction.eft")?;
+    let t14 = msg
+        .records_of(14)
+        .find_map(|r| r.as_ascii())
+        .ok_or("no Type-14 record")?;
+    let wsq = t14.get_bytes("DATA")?; // field 999, borrowed from the message
+    let image = wsq_codec::decode(wsq)?;
+    println!("{} x {} pixels", image.width, image.height);
+    Ok(())
+}
+```
+
 ## Guarantees
 
 - **Parity with the reference implementation**: an oracle bench runs both on whole corpora and requires the

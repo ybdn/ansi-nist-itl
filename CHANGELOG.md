@@ -6,6 +6,10 @@ All notable changes to this crate are documented here. The format follows
 
 ## [Unreleased]
 
+### Documentation
+
+- README: "Decoding a WSQ image", an example that decodes field 999 of a Type-14 with `wsq-codec`, a dependency of the application, not of this crate.
+
 ## [1.0.1] - 2026-11-02
 
 ### Fixed
