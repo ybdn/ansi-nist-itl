@@ -8,6 +8,9 @@ All notable changes to this crate are documented here. The format follows
 
 ### Documentation
 
+- README: drops the outdated pre-1.0 status block, adds the intended audience and a "Limits" section; the claim about malformed input in the reference implementation is removed (not measured).
+- README: links to files excluded from the package (`docs/`, `tools/`) are absolute, so they work on crates.io and docs.rs.
+- `Cargo.toml`: `homepage` added.
 - README: "Decoding a WSQ image", an example that decodes field 999 of a Type-14 with `wsq-codec`, a dependency of the application, not of this crate.
 
 ## [1.0.1] - 2026-11-02

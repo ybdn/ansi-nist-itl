@@ -6,6 +6,7 @@ rust-version = "1.85"
 description = "Read, write and validate ANSI/NIST-ITL biometric files (NIST, EBTS, INT-I), byte for byte compatible with the reference implementation"
 license = "MIT"
 repository = "https://github.com/ybdn/ansi-nist-itl"
+homepage = "https://github.com/ybdn/ansi-nist-itl"
 documentation = "https://docs.rs/ansi-nist-itl"
 readme = "README.md"
 keywords = ["nist", "biometrics", "fingerprint", "ansi-nist-itl", "ebts"]

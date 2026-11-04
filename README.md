@@ -15,19 +15,19 @@ Byte for byte compatible with the reference Python implementation, **3 to 4 time
 have: exact rewriting, a tolerant mode for damaged files, the dictionary of the standard,
 validation against the standard and against the FBI and INTERPOL profiles.
 
-> **Status:** feature-complete, API stabilizing before 1.0 ([CHANGELOG](CHANGELOG.md)).
-> Not yet on crates.io: depend on the repository for now.
+**Who it is for:** developers of AFIS, border-control, forensic or identity software who need to
+exchange, inspect, convert or validate ANSI/NIST-ITL files from Rust, without a Python runtime.
 
 ## Why this crate
 
 | | the reference implementation (Python) | `ansi-nist-itl` |
 |---|---|---|
 | Files accepted or refused, bytes written, error messages | reference | **identical**, checked by an oracle bench |
-| Speed on usual messages ([measured](docs/SPEED.md)) | 1× | **3 to 4×** |
+| Speed on usual messages ([measured](https://github.com/ybdn/ansi-nist-itl/blob/develop/docs/SPEED.md)) | 1× | **3 to 4×** |
 | Rewrite a file exactly as read | no (fields re-sorted, LEN and CNT recomputed) | `to_bytes_exact` |
 | Damaged or truncated files | exception | tolerant mode, with located diagnostics |
 | Errors | raw Python exceptions | typed, with record, field and byte offset |
-| Malformed input | may crash | never panics (fuzzed), no `unsafe` |
+| Malformed input | not covered by the oracle | never panics (fuzzed), no `unsafe` |
 | Field dictionary of the standard | — | 709 entries, ANSI/NIST-ITL 1-2011 Update 2015 |
 | Validation | — | the standard, FBI **EBTS 11.2**, INTERPOL **INT-I 5.03** |
 | Image metadata, code labels (IMP, FGP, compression) | — | typed |
@@ -150,11 +150,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## Limits
+
+- Images are carried as bytes, not decoded (see above for WSQ).
+- The dictionary and tables follow ANSI/NIST-ITL 1-2011 Update 2015; later editions are not covered.
+- Validation reports findings against the standard and two profiles; it is not a certification
+  by FBI or INTERPOL.
+- Speed figures come from one machine (Apple M1) and one reference implementation
+  ([details](https://github.com/ybdn/ansi-nist-itl/blob/develop/docs/SPEED.md)).
+
 ## Guarantees
 
 - **Parity with the reference implementation**: an oracle bench runs both on whole corpora and requires the
   same result for every file (synthetic corpora in CI, real ones locally, never committed).
-  See [`tools/oracle/README.md`](tools/oracle/README.md).
+  See [`tools/oracle/README.md`](https://github.com/ybdn/ansi-nist-itl/blob/develop/tools/oracle/README.md).
 - **Robustness**: three fuzz targets (parsing, exact writing, tolerant mode) run in CI; no
   `unsafe`; property tests.
 - **Portability**: Linux, macOS and Windows in CI; Rust 1.85 or later; works on `&[u8]`, no I/O
@@ -164,7 +173,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Performance
 
-Same operation (read, then write) on the same corpora, Apple M1 ([details](docs/SPEED.md)):
+Same operation (read, then write) on the same corpora, Apple M1 ([details](https://github.com/ybdn/ansi-nist-itl/blob/develop/docs/SPEED.md)):
 
 | Corpus | ansi-nist-itl | the reference implementation | |
 |---|---:|---:|---:|
