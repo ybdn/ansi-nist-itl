@@ -2,7 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/ansi-nist-itl.svg)](https://crates.io/crates/ansi-nist-itl)
 [![docs.rs](https://img.shields.io/docsrs/ansi-nist-itl)](https://docs.rs/ansi-nist-itl)
-[![CI](https://github.com/ybdn/ansi-nist-itl/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/ybdn/ansi-nist-itl/actions/workflows/ci.yml)
+[![CI](https://github.com/ybdn-ei/ansi-nist-itl/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/ybdn-ei/ansi-nist-itl/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![MSRV 1.85](https://img.shields.io/badge/MSRV-1.85-orange.svg)](Cargo.toml)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](src/lib.rs)

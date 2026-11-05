@@ -4,7 +4,7 @@
 
 The crate reads untrusted files: a panic, a hang, an excessive allocation or a wrong result on
 a crafted input is a bug we want to know about. Please report it privately through
-[GitHub security advisories](https://github.com/ybdn/ansi-nist-itl/security/advisories/new)
+[GitHub security advisories](https://github.com/ybdn-ei/ansi-nist-itl/security/advisories/new)
 rather than in a public issue.
 
 ## Never share real NIST files
