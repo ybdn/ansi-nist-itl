@@ -23,7 +23,7 @@ exchange, inspect, convert or validate ANSI/NIST-ITL files from Rust, without a 
 | | the reference implementation (Python) | `ansi-nist-itl` |
 |---|---|---|
 | Files accepted or refused, bytes written, error messages | reference | **identical**, checked by an oracle bench |
-| Speed on usual messages ([measured](https://github.com/ybdn/ansi-nist-itl/blob/develop/docs/SPEED.md)) | 1× | **3 to 4×** |
+| Speed on usual messages ([measured](https://github.com/ybdn-ei/ansi-nist-itl/blob/develop/docs/SPEED.md)) | 1× | **3 to 4×** |
 | Rewrite a file exactly as read | no (fields re-sorted, LEN and CNT recomputed) | `to_bytes_exact` |
 | Damaged or truncated files | exception | tolerant mode, with located diagnostics |
 | Errors | raw Python exceptions | typed, with record, field and byte offset |
@@ -157,13 +157,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - Validation reports findings against the standard and two profiles; it is not a certification
   by FBI or INTERPOL.
 - Speed figures come from one machine (Apple M1) and one reference implementation
-  ([details](https://github.com/ybdn/ansi-nist-itl/blob/develop/docs/SPEED.md)).
+  ([details](https://github.com/ybdn-ei/ansi-nist-itl/blob/develop/docs/SPEED.md)).
 
 ## Guarantees
 
 - **Parity with the reference implementation**: an oracle bench runs both on whole corpora and requires the
   same result for every file (synthetic corpora in CI, real ones locally, never committed).
-  See [`tools/oracle/README.md`](https://github.com/ybdn/ansi-nist-itl/blob/develop/tools/oracle/README.md).
+  See [`tools/oracle/README.md`](https://github.com/ybdn-ei/ansi-nist-itl/blob/develop/tools/oracle/README.md).
 - **Robustness**: three fuzz targets (parsing, exact writing, tolerant mode) run in CI; no
   `unsafe`; property tests.
 - **Portability**: Linux, macOS and Windows in CI; Rust 1.85 or later; works on `&[u8]`, no I/O
@@ -173,7 +173,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Performance
 
-Same operation (read, then write) on the same corpora, Apple M1 ([details](https://github.com/ybdn/ansi-nist-itl/blob/develop/docs/SPEED.md)):
+Same operation (read, then write) on the same corpora, Apple M1 ([details](https://github.com/ybdn-ei/ansi-nist-itl/blob/develop/docs/SPEED.md)):
 
 | Corpus | ansi-nist-itl | the reference implementation | |
 |---|---:|---:|---:|
