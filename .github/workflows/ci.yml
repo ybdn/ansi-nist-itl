@@ -1,90 +1,97 @@
+# Pull requests into develop/main only: a merge replays nothing, the PR was
+# checked. `changes` classifies the diff; every job is skipped when its files
+# did not change, and `ci` is the one status to require. On a release
+# (workflow_call) everything runs. Fuzzing and advisories: scheduled.yml.
 name: CI
 
 on:
-  push:
-    branches: [main, develop]
   pull_request:
+    branches: [develop, main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -D warnings
 
 jobs:
-  test:
-    name: Test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test --all-targets
-      - run: cargo test --doc
-      - run: cargo test --all-targets --all-features
-      - run: cargo test --doc --all-features
-
-  msrv:
-    name: MSRV (1.85)
+  changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read # paths-filter lists the files of the pull request
+    outputs:
+      rust: ${{ github.event_name != 'pull_request' || steps.filter.outputs.rust == 'true' }}
+      oracle: ${{ github.event_name != 'pull_request' || steps.filter.outputs.oracle == 'true' }}
+      data: ${{ github.event_name != 'pull_request' || steps.filter.outputs.data == 'true' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.85
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --all-features
-
-  lint:
-    name: Clippy and rustfmt
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
-          components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo fmt --all --check
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+          filters: |
+            rust: &rust
+              - "src/**"
+              - "README.md" # included by src/lib.rs: doctests and cargo doc
+              - "benches/**"
+              - "tests/**"
+              - "examples/**"
+              - "Cargo.*"
+              - ".github/workflows/**"
+            oracle:
+              - *rust
+              - "tools/oracle/**"
+            data:
+              - "data/**"
+              - "tools/check-data-files.sh"
+
+  core:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    uses: ybdn-ei/.github/.github/workflows/rust-ci.yml@main
+    with:
+      msrv: "1.85"
+      feature-sets: '["", "--all-features"]'
+    secrets: inherit
 
   bench:
     name: Benchmarks (build)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo bench --no-run
-
-  doc:
-    name: Documentation
-    runs-on: ubuntu-latest
-    env:
-      RUSTDOCFLAGS: -D warnings
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo doc --no-deps --all-features
 
   oracle:
     name: Oracle (the reference implementation)
+    needs: changes
+    if: needs.changes.outputs.oracle == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - run: python -m pip install nistitl==0.6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Synthetic corpus (seed = run number)
         run: python -I tools/oracle/gen_corpus.py "$RUNNER_TEMP/corpus" 20000 "$GITHUB_RUN_NUMBER"
       - name: Compare with the reference implementation
@@ -95,43 +102,21 @@ jobs:
 
   data:
     name: Data files (DATA-04)
+    needs: changes
+    if: needs.changes.outputs.data == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: tools/check-data-files.sh
 
-  fuzz:
-    name: Fuzz
+  # The one status to read: green when every needed job passed or was skipped.
+  ci:
+    if: ${{ !cancelled() }}
+    needs: [changes, core, bench, oracle, data]
     runs-on: ubuntu-latest
-    env:
-      # cargo-fuzz sets its own flags; warnings of libFuzzer must not fail it.
-      RUSTFLAGS: ""
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-fuzz
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            .
-            fuzz
-      - name: Synthetic seed corpus
-        run: |
-          cargo run --example fuzz_seeds -- fuzz/corpus/parse
-          cargo run --example fuzz_seeds -- fuzz/corpus/exact
-          cargo run --example fuzz_seeds -- fuzz/corpus/parse_tolerant
-      - name: Fuzz for two minutes
-        # The prebuilt cargo-fuzz is a musl binary: its default target would be
-        # musl, which the sanitizers do not support.
-        run: cargo fuzz run parse --target x86_64-unknown-linux-gnu -- -max_total_time=120 -max_len=8192
-      - name: Fuzz the exact writing for one minute
-        run: cargo fuzz run exact --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
-      - name: Fuzz the tolerant mode for one minute
-        run: cargo fuzz run parse_tolerant --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: fuzz-artifacts
-          path: fuzz/artifacts
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - run: echo ok
