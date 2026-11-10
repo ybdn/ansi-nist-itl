@@ -1,10 +1,19 @@
-# Pull requests into develop/main only: a merge replays nothing, the PR was
-# checked. `changes` classifies the diff; every job is skipped when its files
-# did not change, and `ci` is the one status to require. On a release
-# (workflow_call) everything runs. Fuzzing and advisories: scheduled.yml.
+# Pull requests into develop/main only: a merge into develop replays nothing, the
+# PR was checked. `main` only receives releases, so it alone also runs on push:
+# the CI badge of the README follows it and needs runs on that branch. `changes`
+# classifies the diff; every job is skipped when its files did not change, and
+# `ci` is the one status to require. On a push, a release (workflow_call) or a
+# manual run everything runs.
+#   core        shared workflow: tests, clippy, rustfmt, docs, MSRV 1.85 (cargo check only)
+#   msrv-test   the tests themselves on Rust 1.85
+#   oracle      comparison with nistitl 0.6 on CPython 3.12.16 (tools/oracle/README.md)
+#   fuzz        one minute per fuzz target, from a synthetic seed corpus
+# The long fuzzing (about twenty minutes) and the advisories: scheduled.yml.
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [develop, main]
   workflow_call:

@@ -26,7 +26,10 @@ Thanks for your interest in `ansi-nist-itl`! Issues and pull requests are welcom
 
 ## Checks
 
-The CI runs the following on Linux, macOS and Windows; run them before pushing:
+The CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every pull request
+against `develop` or `main` (and on a push to `main`, which only receives releases). A job
+is skipped when the pull request does not touch its files; the `ci` job is the single status
+to require. Before pushing, run what the shared Rust workflow checks:
 
 ```sh
 cargo fmt --all --check
@@ -36,9 +39,18 @@ cargo test --doc --all-features
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 ```
 
-When a change touches parsing or writing, also run the oracle bench against the reference implementation
-([`tools/oracle/README.md`](tools/oracle/README.md)) and, if possible, the fuzz targets
-(`cargo +nightly fuzz run parse`, in `fuzz/`).
+The CI also runs:
+
+- the tests on the MSRV, Rust 1.85 (`cargo +1.85 test --lib --tests`; the shared workflow
+  only runs `cargo check` on it);
+- the oracle bench against the reference implementation, on a pinned CPython 3.12.16
+  ([`tools/oracle/README.md`](tools/oracle/README.md));
+- the fuzz targets `parse`, `exact` and `parse_tolerant` for one minute each, from a
+  synthetic seed corpus. A longer run (about twenty minutes) and the RustSec advisories run
+  every week, and on demand, in `.github/workflows/scheduled.yml`.
+
+When a change touches parsing or writing, run the oracle bench and, if possible, the fuzz
+targets (`cargo +nightly fuzz run parse`, in `fuzz/`) before pushing.
 
 ## Generated tables
 
