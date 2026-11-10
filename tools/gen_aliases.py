@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate src/alias/table.rs from nistitl.ALIASES (SPEC §4.5, annex A).
+"""Generate src/alias/table.rs from nistitl.ALIASES (LIB-07).
 
 The order of the types and, within a type, of the tags is the order of the
 Python dict, which the reference implementation relies on to find "the first tag whose alias is X".

@@ -1,4 +1,4 @@
-//! Values stored in fields, subfields and items (SPEC §2).
+//! Values stored in fields, subfields and items.
 //!
 //! the reference implementation stores arbitrary Python objects. The crate covers what it
 //! produces when reading and what its examples write: `None`, `bool`, `int`
@@ -241,7 +241,7 @@ fn repr_list<T>(items: &[T], repr: impl Fn(&T) -> String) -> String {
     format!("[{}]", parts.join(", "))
 }
 
-/// Item of a subfield: a scalar, or a nested list (an edge case, SPEC §5.5).
+/// Item of a subfield: a scalar, or a nested list (an edge case of the reference implementation).
 ///
 /// ```
 /// use ansi_nist_itl::Item;
@@ -578,7 +578,7 @@ impl<T: Into<ListElem>> From<Vec<T>> for Value {
 /// Kind of a field or subfield: the flags `F`, `S` and `I` of the Python `type`.
 ///
 /// `F`: the field may hold a value; `S`: subfields; `I`: items. Only the
-/// presence of the three letters matters (SPEC §5.1).
+/// presence of the three letters matters, as in the reference implementation.
 ///
 /// ```
 /// use ansi_nist_itl::Kind;
@@ -683,7 +683,7 @@ mod tests {
 
     #[test]
     fn str_and_repr() {
-        // SPEC §3.3 / C84.
+        // `str` and `repr` of a list holding quotes.
         let v = Value::List(vec![
             ListElem::from(vec!["a'b", "c\"d"]),
             ListElem::from("x\ty\u{a0}\u{ad}\\"),

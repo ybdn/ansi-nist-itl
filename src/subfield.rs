@@ -1,4 +1,4 @@
-//! Subfields of a text field (SPEC §5).
+//! Subfields of a text field.
 
 use crate::US;
 use crate::error::{Error, Result};
@@ -9,7 +9,7 @@ use crate::value::{Item, Kind, Scalar, SubValue};
 /// separated by US (`0x1F`) when written.
 ///
 /// The [`Kind`] restricts the content: `S` allows a non-empty scalar value,
-/// `I` allows items (SPEC §5.1). A false value (`""`, `None`, `0`, `False`)
+/// `I` allows items. A false value (`""`, `None`, `0`, `False`)
 /// is always accepted.
 ///
 /// ```

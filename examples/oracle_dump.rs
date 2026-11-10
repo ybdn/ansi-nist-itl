@@ -1,5 +1,5 @@
 //! Oracle dump of the crate, the counterpart of `tools/oracle/dump.py`
-//! (SPEC §15.3).
+//! (QA-02).
 //!
 //! For each file under the given paths (files or directories, read
 //! recursively, in sorted order), prints one line `<path> TAB <json>`:
@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 use ansi_nist_itl::{Error, ErrorKind, Message};
 
-/// Name of the Python exception the reference implementation raises for `e` (SPEC §12).
+/// Name of the Python exception the reference implementation raises for `e`.
 pub fn exception(e: &Error) -> &'static str {
     let message = e.message();
     match e.kind() {

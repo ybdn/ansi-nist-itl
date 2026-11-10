@@ -1,4 +1,4 @@
-//! `repr()` of `str`, `bytes` and `float` (SPEC §3.3, §3.4).
+//! `repr()` of `str`, `bytes` and `float`, as CPython 3.12 implements them.
 
 use std::fmt::Write;
 
@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn str_escapes() {
-        // SPEC §3.3 / C84: 'x\ty\xa0\xad\\'
+        // Escapes of `repr` for a tab, a no-break space, a soft hyphen and a backslash: 'x\ty\xa0\xad\\'
         assert_eq!(repr_str("x\ty\u{a0}\u{ad}\\"), "'x\\ty\\xa0\\xad\\\\'");
         assert_eq!(repr_str("\n\r\x00\x1c\x7f"), "'\\n\\r\\x00\\x1c\\x7f'");
         assert_eq!(repr_str("é€ Ã©"), "'é€ Ã©'");

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Oracle of the reference implementation on a corpus of NIST files (SPEC §15.3).
+"""Oracle of the reference implementation on a corpus of NIST files (QA-02).
 
 For each file under the given paths (files or directories, read
 recursively, in sorted order), prints one line `<path> TAB <json>`:

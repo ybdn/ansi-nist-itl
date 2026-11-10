@@ -1,4 +1,4 @@
-//! Binary records, Types 3 to 8 (SPEC §9).
+//! Binary records, Types 3 to 8.
 
 use crate::bytes::Bytes;
 use crate::error::{Error, ErrorKind, Position, Result};
@@ -38,7 +38,7 @@ pub struct BinaryRecord {
     idc: u8,
     value: Bytes,
     format: String,
-    /// What the parsing read, for the exact writing (SPEC §13.1).
+    /// What the parsing read, for the exact writing (LIB-12).
     origin: Option<Box<BinaryOrigin>>,
 }
 
@@ -366,8 +366,7 @@ impl BinaryRecord {
     }
 }
 
-/// Header of an image record of Types 3 to 6, after LEN and IDC (SPEC §1.3,
-/// §13.3): 13 bytes, integers big-endian.
+/// Header of an image record of Types 3 to 6, after LEN and IDC (LIB-03): 13 bytes, integers big-endian.
 ///
 /// ```
 /// use ansi_nist_itl::{BinaryRecord, ImageHeader};
@@ -446,8 +445,7 @@ impl ImageHeader {
     }
 }
 
-/// Header of a signature record of Type 8, after LEN and IDC (SPEC §1.3,
-/// §13.3): 7 bytes, integers big-endian.
+/// Header of a signature record of Type 8, after LEN and IDC (LIB-03): 7 bytes, integers big-endian.
 ///
 /// ```
 /// use ansi_nist_itl::{BinaryRecord, SignatureHeader};
@@ -542,7 +540,7 @@ impl BinaryRecord {
         Ok(())
     }
 
-    /// Header of an image record of Types 3 to 6 (SPEC §13.3).
+    /// Header of an image record of Types 3 to 6 (LIB-03).
     ///
     /// Another type, or a value shorter than 13 bytes, gives a
     /// `BAD_CONTENT` error.
@@ -585,7 +583,7 @@ impl BinaryRecord {
         self.put_header(&header.to_bytes(), "image", "types 3 to 6")
     }
 
-    /// Header of a signature record of Type 8 (SPEC §13.3).
+    /// Header of a signature record of Type 8 (LIB-03).
     ///
     /// Another type, or a value shorter than 7 bytes, gives a `BAD_CONTENT`
     /// error.

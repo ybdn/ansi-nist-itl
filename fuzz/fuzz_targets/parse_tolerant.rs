@@ -1,4 +1,4 @@
-//! The tolerant mode always reads a message (SPEC §13.2, §15.5): the same as
+//! The tolerant mode always reads a message (LIB-13, QA-04): the same as
 //! the strict mode, with warnings only, when the strict mode accepts the
 //! buffer; and `to_bytes_exact` gives the buffer back.
 

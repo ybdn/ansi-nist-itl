@@ -1,5 +1,5 @@
 //! `to_bytes_exact` gives back every buffer that `parse` accepts, before and
-//! after `to_bytes` (SPEC §13.1, §15.5).
+//! after `to_bytes` (LIB-12, QA-04).
 
 #![no_main]
 

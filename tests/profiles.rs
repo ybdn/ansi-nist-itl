@@ -1,4 +1,4 @@
-//! Application profiles EBTS 11.2 and INT-I 5.03 (LIB-17, SPEC §13.10).
+//! Application profiles EBTS 11.2 and INT-I 5.03 (LIB-17).
 
 #![cfg(feature = "validation")]
 
