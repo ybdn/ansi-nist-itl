@@ -136,10 +136,53 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: tools/check-data-files.sh
 
+  # A short pass on every pull request; the long one, with more time per target,
+  # runs every week in scheduled.yml. Same setup, same seed corpus.
+  fuzz:
+    name: Fuzz (one minute per target)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # cargo-fuzz sets its own flags; warnings of libFuzzer must not fail it.
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: nightly
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: cargo-fuzz
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: |
+            .
+            fuzz
+      - name: Synthetic seed corpus
+        run: |
+          cargo run --example fuzz_seeds -- fuzz/corpus/parse
+          cargo run --example fuzz_seeds -- fuzz/corpus/exact
+          cargo run --example fuzz_seeds -- fuzz/corpus/parse_tolerant
+      # The prebuilt cargo-fuzz is a musl binary: its default target would be
+      # musl, which the sanitizers do not support.
+      - name: Fuzz the parser for one minute
+        run: cargo fuzz run parse --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
+      - name: Fuzz the exact writing for one minute
+        run: cargo fuzz run exact --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
+      - name: Fuzz the tolerant mode for one minute
+        run: cargo fuzz run parse_tolerant --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts
+
   # The one status to read: green when every needed job passed or was skipped.
   ci:
     if: ${{ !cancelled() }}
-    needs: [changes, core, msrv-test, bench, oracle, data]
+    needs: [changes, core, msrv-test, bench, oracle, data, fuzz]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
