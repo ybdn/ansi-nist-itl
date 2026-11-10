@@ -29,6 +29,14 @@ All notable changes to this crate are documented here. The format follows
 - README: "Decoding a WSQ image", an example that decodes field 999 of a Type-14 with `wsq-codec`, a dependency of the application, not of this crate.
 - README: "Limits" completed (UTF-16 and UTF-32 planned in 1.x, XML/NIEM considered for a 2.x, only the EBTS 11.2 and INT-I 5.03 profiles bundled).
 - References to the former specification document (`SPEC §…`) replaced, in comments and tool documentation, by the identifiers of the requirements of `docs/PRD.md` or by a self-contained description. `docs/PRD.md` is now a reference document, dated 2026-11-10, with the status of each requirement.
+- README: "Portability" states what CI really covers: Linux only.
+
+### Continuous integration
+
+- Tests run on the MSRV (Rust 1.85), not only `cargo check`.
+- Oracle bench on CPython 3.12.16 installed by uv 0.13.6; uv and `nistitl` 0.6 are pinned by SHA-256 (`tools/oracle/requirements*.txt`).
+- Short fuzzing pass (one minute per target) on pull requests, besides the weekly long run.
+- CI also runs on pushes to `main`; the README badge follows `main`.
 
 ## [1.0.1] - 2026-11-02
 
