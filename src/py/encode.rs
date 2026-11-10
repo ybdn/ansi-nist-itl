@@ -1,5 +1,5 @@
 //! `str.encode('latin-1')` and `str.encode('ascii')`, as CPython 3.12
-//! implements them (SPEC §5.7, §9.5).
+//! implements them.
 
 use std::fmt;
 

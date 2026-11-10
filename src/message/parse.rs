@@ -1,5 +1,5 @@
-//! Parsing of a message (`Message.parse`, SPEC §10.8–10.10), and its
-//! tolerant mode (SPEC §13.2).
+//! Parsing of a message (`Message.parse`), and its
+//! tolerant mode (LIB-13).
 
 use super::lexer::{Lexed, lex, match_tag_begin, match_tag_len};
 use super::{Message, RecordVisitor, int_of, int_of_scalar};
@@ -44,7 +44,7 @@ impl ParseOptions {
 
     /// Reads as much as possible (LIB-13): the parsing always succeeds, and
     /// each error the reference implementation would raise becomes a [`Diagnostic`] with a
-    /// recovery (SPEC §13.2). The quirks E3 to E5 of the reference implementation, kept as is,
+    /// recovery (LIB-13). The quirks E3 to E5 of the reference implementation, kept as is,
     /// are reported too.
     ///
     /// On a buffer that the strict mode accepts, the message read is the
@@ -253,7 +253,7 @@ impl Notes {
     }
 }
 
-/// Visitor of the reference implementation (`_Parser`, SPEC §10.8): fills a tagged record.
+/// Visitor of the reference implementation (`_Parser`): fills a tagged record.
 struct TextParser<'a> {
     record: &'a mut AsciiRecord,
     subfields: Vec<SubField>,
@@ -454,7 +454,7 @@ struct Parser {
     /// whenever the Type-1 is read again.
     cnt_chars: Option<Vec<char>>,
     /// For each record, the bytes read and the bytes of its fields
-    /// (SPEC §13.1).
+    /// (LIB-12).
     origins: Vec<(Vec<Bytes>, Vec<RawField>)>,
 }
 
@@ -820,7 +820,7 @@ impl Parser {
     }
 
     /// Lexes `text` into the tagged record at `index`, with the rule of the
-    /// `future` error (SPEC §10.9).
+    /// `future` error.
     fn lex_into(
         &mut self,
         index: usize,
@@ -1082,7 +1082,7 @@ impl CntEntry {
     }
 }
 
-/// Final check of the CNT (SPEC §10.10).
+/// Final check of the CNT.
 fn check_cnt(message: &Message) -> Result<()> {
     let at = |i: Option<usize>| {
         move |mut e: Error| {

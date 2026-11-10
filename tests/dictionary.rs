@@ -1,4 +1,4 @@
-//! Field dictionary (LIB-15, SPEC §13.6): structure of the tables, and
+//! Field dictionary (LIB-15): structure of the tables, and
 //! values checked by hand against the layout tables of the standard.
 
 #![cfg(feature = "dictionary")]

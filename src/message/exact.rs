@@ -1,4 +1,4 @@
-//! Exact writing (`to_bytes_exact`, SPEC §13.1, LIB-12): the bytes read for
+//! Exact writing (`to_bytes_exact`, LIB-12): the bytes read for
 //! what did not change.
 
 use std::borrow::Cow;
@@ -126,7 +126,7 @@ mod tests {
     use crate::record::AsciiRecord;
     use crate::{Field, Message};
 
-    /// `rec(t, body)` of SPEC appendix C: a tagged record whose LEN is
+    /// `rec(t, body)`, as in the edge cases of the reference implementation: a tagged record whose LEN is
     /// computed, `body` holding the fields after LEN and the final FS.
     fn rec(t: u32, body: &[u8]) -> Vec<u8> {
         let head = format!("{t}.001:");

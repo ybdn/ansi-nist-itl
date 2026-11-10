@@ -1,4 +1,4 @@
-//! Records: tagged (SPEC §8) and binary (SPEC §9).
+//! Records: tagged and binary.
 
 mod ascii;
 mod binary;
@@ -194,7 +194,7 @@ impl Record {
         }
     }
 
-    /// Bytes of a changed record for the exact writing (SPEC §13.1).
+    /// Bytes of a changed record for the exact writing (LIB-12).
     pub(crate) fn exact_bytes(&self, cnt_rebuilt: bool) -> Result<Vec<u8>> {
         match self {
             Record::Ascii(r) => r.exact_bytes(cnt_rebuilt),

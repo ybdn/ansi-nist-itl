@@ -1,4 +1,4 @@
-//! Image metadata (LIB-20, SPEC §13.7).
+//! Image metadata (LIB-20).
 
 use ansi_nist_itl::codes::{Compression, FrictionRidgePosition, ImpressionType};
 use ansi_nist_itl::image::{ImageInfo, Resolution, ScaleUnit};

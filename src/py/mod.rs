@@ -1,4 +1,4 @@
-//! Python 3.12 conversions that the reference implementation relies on (SPEC §3).
+//! Python 3.12 conversions that the reference implementation relies on.
 //!
 //! the reference implementation reads numbers with `int()`, writes values with `str()`, builds
 //! error messages and summaries with `repr()` and string formatting. Matching

@@ -1,7 +1,7 @@
 # Oracle bench
 
 `ansi-nist-itl` reproduces `nistitl` 0.6 byte for byte. These tools
-compare the two on whole corpora (SPEC §15.3, §15.5; QA-02, QA-03, QA-04).
+compare the two on whole corpora (QA-02, QA-03, QA-04).
 
 | Tool | Role |
 |------|------|

@@ -1,4 +1,4 @@
-//! Character encodings of field 1.015 (LIB-18, SPEC §13.8).
+//! Character encodings of field 1.015 (LIB-18).
 
 use ansi_nist_itl::encoding::{CharacterEncoding, decode, encode};
 use ansi_nist_itl::{AsciiRecord, Defaults, ErrorKind, Message, Value};
