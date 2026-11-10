@@ -62,6 +62,23 @@ jobs:
       feature-sets: '["", "--all-features"]'
     secrets: inherit
 
+  # `core` only runs `cargo check` on the MSRV: this job runs the tests on it.
+  msrv-test:
+    name: Tests on the MSRV (1.85)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: "1.85"
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo test --lib --tests
+      - run: cargo test --lib --tests --all-features
+      - run: cargo test --doc
+
   bench:
     name: Benchmarks (build)
     needs: changes
@@ -113,7 +130,7 @@ jobs:
   # The one status to read: green when every needed job passed or was skipped.
   ci:
     if: ${{ !cancelled() }}
-    needs: [changes, core, bench, oracle, data]
+    needs: [changes, core, msrv-test, bench, oracle, data]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
