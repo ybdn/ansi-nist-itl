@@ -15,12 +15,28 @@ compare the two on whole corpora (SPEC §15.3, §15.5; QA-02, QA-03, QA-04).
 
 ## Requirements
 
-CPython 3.12.16 with `nistitl` 0.6 (`pip install nistitl==0.6`, identical to the
-reference), or `NISTITL_PATH` naming the directory of `nistitl.py`.
-`ANSI_NIST_ITL_PYTHON` names the interpreter (default `python3`). CI installs the
-pinned interpreter with uv 0.13.6 instead of using Debian's system Python;
-uv and the reference implementation are installed with `--require-hashes`, and uv checks the CPython
-archive against the SHA-256 recorded in its release metadata.
+CPython 3.12.16 with `nistitl` 0.6 (identical to the reference), or `NISTITL_PATH`
+naming the directory of `nistitl.py`. `ANSI_NIST_ITL_PYTHON` names the interpreter
+(default `python3`).
+
+The CI installs the pinned interpreter with uv 0.13.6 instead of using the system
+Python of the runner. Nothing floats:
+
+- uv comes from [`requirements-uv.txt`](requirements-uv.txt) (`pip install --require-hashes`);
+- `uv python install 3.12.16` downloads CPython, and uv checks the archive against the
+  SHA-256 recorded in its release metadata;
+- `nistitl` comes from [`requirements.txt`](requirements.txt)
+  (`uv pip install --require-hashes`); it is a pure-Python wheel without dependencies.
+
+To get the same setup locally:
+
+```sh
+uv python install 3.12.16
+uv venv --python 3.12.16 /tmp/oracle
+uv pip install --python /tmp/oracle --require-hashes --only-binary :all: -r tools/oracle/requirements.txt
+export ANSI_NIST_ITL_PYTHON=/tmp/oracle/bin/python
+```
+
 Exception messages are compared verbatim: Python 3.11 reports `min() arg is an
 empty sequence`, whereas the reference reports `min() iterable argument is empty`.
 Do not normalize these differences or change the Rust public errors to fit the runner.
@@ -37,8 +53,10 @@ ANSI_NIST_ITL_CORPUS=/path/to/corpus cargo test --release --test oracle
 ## Synthetic corpus
 
 ```sh
-python3.12 -I tools/oracle/gen_corpus.py /tmp/corpus 20000 1
+"${ANSI_NIST_ITL_PYTHON:-python3.12}" -I tools/oracle/gen_corpus.py /tmp/corpus 20000 1
 ANSI_NIST_ITL_CORPUS=/tmp/corpus cargo test --release --test oracle
 ```
 
-The CI does the same on every push, with the run number as seed.
+The CI does the same on every pull request that touches the code or `tools/oracle/`,
+with the run number as seed (it also runs on a push to `main`, on a release and on a
+manual run).
