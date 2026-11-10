@@ -1,14 +1,14 @@
 # Oracle bench
 
-`ansi-nist-itl` reproduces the reference implementation byte for byte. These tools
+`ansi-nist-itl` reproduces `nistitl` 0.6 byte for byte. These tools
 compare the two on whole corpora (SPEC §15.3, §15.5; QA-02, QA-03, QA-04).
 
 | Tool | Role |
 |------|------|
-| `dump.py` | One JSON line per file, as the reference implementation reads it: summary and SHA-256 of the rewrite, or the exception |
+| `dump.py` | One JSON line per file, as `nistitl` reads it: summary and SHA-256 of the rewrite, or the exception |
 | `../../examples/oracle_dump.rs` | The same JSON line, from the crate |
 | `../../tests/oracle.rs` | Runs both on `ANSI_NIST_ITL_CORPUS` and requires identical lines; also checks that `to_bytes_exact` gives back every accepted file |
-| `gen_corpus.py` | Synthetic corpus: messages built by the reference implementation, then mutated at random |
+| `gen_corpus.py` | Synthetic corpus: messages built by `nistitl`, then mutated at random |
 | `fuzz-differential.sh` | Fuzzes the parser, then replays the corpus of the fuzzer in the bench |
 | `gen_struct_vectors.py` | Vectors of Python's `struct` module (`tests/data/struct_vectors.tsv`) |
 | `gen_py_vectors.py` | Vectors of `int()`, `repr()` and float `repr` |
@@ -19,10 +19,10 @@ CPython 3.12.16 with `nistitl` 0.6 (`pip install nistitl==0.6`, identical to the
 reference), or `NISTITL_PATH` naming the directory of `nistitl.py`.
 `ANSI_NIST_ITL_PYTHON` names the interpreter (default `python3`). CI installs the
 pinned interpreter with uv 0.13.6 instead of using Debian's system Python;
-uv and the reference implementation are installed with `--require-hashes`, and uv checks the CPython
+uv and `nistitl` are installed with `--require-hashes`, and uv checks the CPython
 archive against the SHA-256 recorded in its release metadata.
 Exception messages are compared verbatim: Python 3.11 reports `min() arg is an
-empty sequence`, whereas the reference reports `min() iterable argument is empty`.
+empty sequence`, whereas `nistitl` reports `min() iterable argument is empty`.
 Do not normalize these differences or change the Rust public errors to fit the runner.
 
 ## Real files

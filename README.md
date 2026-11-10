@@ -11,7 +11,8 @@
 `.an2` and `.int` transactions that police, border and identity systems exchange (FBI EBTS,
 INTERPOL INT-I, national AFIS).
 
-Byte for byte compatible with the reference Python implementation, **3 to 4 times faster**, and with what it does not
+Byte for byte compatible with [`nistitl`](https://github.com/idemia/python-nistitl), the
+reference Python library of IDEMIA, **3 to 4 times faster**, and with what `nistitl` does not
 have: exact rewriting, a tolerant mode for damaged files, the dictionary of the standard,
 validation against the standard and against the FBI and INTERPOL profiles.
 
@@ -20,7 +21,7 @@ exchange, inspect, convert or validate ANSI/NIST-ITL files from Rust, without a 
 
 ## Why this crate
 
-| | the reference implementation (Python) | `ansi-nist-itl` |
+| | `nistitl` 0.6 (Python) | `ansi-nist-itl` |
 |---|---|---|
 | Files accepted or refused, bytes written, error messages | reference | **identical**, checked by an oracle bench |
 | Speed on usual messages ([measured](https://github.com/ybdn-ei/ansi-nist-itl/blob/develop/docs/SPEED.md)) | 1× | **3 to 4×** |
@@ -87,7 +88,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     r2.set("IDC", 0)?;
     r2.set("_18", "DOE,JOHN")?;
     msg.push(r2)?;
-    let bytes = msg.to_bytes()?; // LEN and CNT computed, as the reference implementation does
+    let bytes = msg.to_bytes()?; // LEN and CNT computed, as nistitl does
 
     let read = Message::parse(&bytes)?;
     assert_eq!(read.to_bytes_exact()?, bytes); // the bytes read, untouched
@@ -123,7 +124,7 @@ examples.
 
 | Feature | Default | Effect |
 |---------|---------|--------|
-| `local-date` | yes | Today's date of a new Type-1 is the local date, as in the reference implementation (UTC without it) |
+| `local-date` | yes | Today's date of a new Type-1 is the local date, as in `nistitl` (UTC without it) |
 | `dictionary` | no | Fields of each record type (mnemonic, name, format, cardinality), after ANSI/NIST-ITL 1-2011 Update 2015 |
 | `validation` | no | `Message::validate` against the tables of the standard (implies `dictionary`); `validate_profile` against FBI EBTS 11.2 and INTERPOL INT-I 5.03 |
 | `serde` | no | `Serialize` / `Deserialize` on the model, in a stable form (binary data in base64 for JSON) |
@@ -161,7 +162,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Guarantees
 
-- **Parity with the reference implementation**: an oracle bench runs both on whole corpora and requires the
+- **Parity with `nistitl` 0.6**: an oracle bench runs both on whole corpora and requires the
   same result for every file (synthetic corpora in CI, real ones locally, never committed).
   See [`tools/oracle/README.md`](https://github.com/ybdn-ei/ansi-nist-itl/blob/develop/tools/oracle/README.md).
 - **Robustness**: three fuzz targets (parsing, exact writing, tolerant mode) run in CI; no
@@ -175,7 +176,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Same operation (read, then write) on the same corpora, Apple M1 ([details](https://github.com/ybdn-ei/ansi-nist-itl/blob/develop/docs/SPEED.md)):
 
-| Corpus | ansi-nist-itl | the reference implementation | |
+| Corpus | ansi-nist-itl | nistitl | |
 |---|---:|---:|---:|
 | 20,000 synthetic messages | 263 ms | 1,055 ms | 4.0× |
 | 1,000 messages of ~4 KiB | 77 ms | 252 ms | 3.3× |
@@ -190,6 +191,23 @@ On large images both copy bytes at the speed of memory. Benchmarks of the crate 
 Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Never attach a
 real NIST file to an issue: [SECURITY.md](SECURITY.md) says how to report a problem with one.
 
+## Compatibility reference
+
+[`nistitl`](https://github.com/idemia/python-nistitl) 0.6 (Python, © IDEMIA, licensed under
+[CeCILL-C](https://cecill.info/licences.en.html)) is the compatibility reference of this crate:
+`ansi-nist-itl` is an independent reimplementation in Rust that is tested for byte-for-byte
+agreement with it. `nistitl` is used at test time only, as a black-box oracle: the oracle bench
+and the differential fuzzing run it on synthetic corpora and compare what it reads, writes and
+reports with what this crate does ([`tools/oracle/README.md`](tools/oracle/README.md)). It is not
+bundled with the crate, not a dependency, and none of its source code is copied. Two things come
+from it as data: the table of field aliases (`src/alias/table.rs`) is generated from its `ALIASES`
+by `tools/gen_aliases.py`, and some tests replay the examples of its documentation. Many thanks to
+IDEMIA for publishing `nistitl`.
+
+The tables of the standard and of the profiles come from the public documents of NIST
+(SP 500-290e3), of the FBI (EBTS 11.2) and of INTERPOL (INT-I 5.03).
+
 ## License
 
-Licensed under the [MIT License](LICENSE).
+Licensed under the [MIT License](LICENSE). This license applies to `ansi-nist-itl` only; it does not
+change that of `nistitl`, which stays CeCILL-C.

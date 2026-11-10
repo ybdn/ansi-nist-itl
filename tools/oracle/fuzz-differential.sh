@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Differential fuzzing against the reference implementation (SPEC §15.5, QA-02, QA-04): fuzz
+# Differential fuzzing against `nistitl` (SPEC §15.5, QA-02, QA-04): fuzz
 # the parser, then replay the corpus the fuzzer produced in the oracle bench.
 # Any difference that SPEC §11 and §12 do not list is a bug of the crate.
 #

@@ -1,10 +1,10 @@
-//! Oracle bench (SPEC §15.3, QA-02, DATA-03): the crate and the reference implementation
+//! Oracle bench (SPEC §15.3, QA-02, DATA-03): the crate and `nistitl`
 //! must give the same JSON on every file of a corpus kept out of the
 //! repository.
 //!
 //! Skipped unless `ANSI_NIST_ITL_CORPUS` names a file or directory. The
 //! Python side runs `tools/oracle/dump.py` with `ANSI_NIST_ITL_PYTHON`
-//! (default `python3`), which must import the reference implementation under CPython 3.12
+//! (default `python3`), which must import `nistitl` under CPython 3.12
 //! (`NISTITL_PATH` may name the directory of `nistitl.py`).
 //!
 //! ```text

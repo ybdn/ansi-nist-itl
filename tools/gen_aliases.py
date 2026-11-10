@@ -2,9 +2,9 @@
 """Generate src/alias/table.rs from nistitl.ALIASES (SPEC §4.5, annex A).
 
 The order of the types and, within a type, of the tags is the order of the
-Python dict, which the reference implementation relies on to find "the first tag whose alias is X".
+Python dict, which `nistitl` relies on to find "the first tag whose alias is X".
 
-Usage (from the repository root, with the reference implementation importable):
+Usage (from the repository root, with `nistitl` importable):
 
     python3.12 tools/gen_aliases.py > src/alias/table.rs
 """

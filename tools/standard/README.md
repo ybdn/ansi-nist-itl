@@ -28,5 +28,5 @@ How the tables are read:
   Type-7, the undefined fields 9.142–9.150 of the INCITS 378 block, and
   `LEN` for the record headers (Annex B.2.3.1).
 
-The mnemonics agree with the aliases of the reference implementation, except 13.992 (`T2C` in
-the reference implementation, reserved in Update 2015); a unit test checks it.
+The mnemonics agree with the aliases of `nistitl`, except 13.992 (`T2C` in
+`nistitl`, reserved in Update 2015); a unit test checks it.

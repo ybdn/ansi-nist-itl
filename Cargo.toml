@@ -1,9 +1,9 @@
 [package]
 name = "ansi-nist-itl"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2024"
 rust-version = "1.85"
-description = "Read, write and validate ANSI/NIST-ITL biometric files (NIST, EBTS, INT-I), byte for byte compatible with the reference implementation"
+description = "Read, write and validate ANSI/NIST-ITL biometric files (NIST, EBTS, INT-I), byte for byte compatible with nistitl 0.6 (IDEMIA)"
 license = "MIT"
 repository = "https://github.com/ybdn-ei/ansi-nist-itl"
 homepage = "https://github.com/ybdn-ei/ansi-nist-itl"

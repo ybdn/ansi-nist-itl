@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Oracle of the reference implementation on a corpus of NIST files (SPEC §15.3).
+"""Oracle of `nistitl` on a corpus of NIST files (SPEC §15.3).
 
 For each file under the given paths (files or directories, read
 recursively, in sorted order), prints one line `<path> TAB <json>`:
@@ -8,7 +8,7 @@ recursively, in sorted order), prints one line `<path> TAB <json>`:
 - failure: {"ok": false, "error": str(exception), "exception": class name}
 
 `str(msg)` is computed before `msg.NIST`, as `examples/oracle_dump.rs` does.
-Run with the the reference implementation used as reference, for instance:
+Run with `nistitl` used as reference, for instance:
 
     python3.12 -I tools/oracle/dump.py <corpus> > python.tsv
     cargo run --release --example oracle_dump -- <corpus> > rust.tsv
