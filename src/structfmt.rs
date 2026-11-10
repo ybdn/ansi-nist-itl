@@ -1,4 +1,4 @@
-//! Python's `struct` language, as CPython 3.12 implements it (SPEC §9.5).
+//! Python's `struct` language, as CPython 3.12 implements it.
 //!
 //! the reference implementation packs and unpacks the value of binary records with
 //! `struct.pack` and `struct.unpack`. This module reproduces their sizes,

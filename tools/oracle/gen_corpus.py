@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Synthetic corpus for the oracle bench and the fuzzer (DATA-01, DATA-02).
 
-Builds messages with the reference implementation (no real data: every value is invented),
+Builds messages with `nistitl` (no real data: every value is invented),
 then mutates them at random: bytes replaced by separators, digits or noise,
 bytes inserted or deleted, truncations, LEN and CNT rewritten, records
 duplicated or swapped. Writes `<count>` files `NNNNNN.nist` into `<dir>`.
@@ -34,7 +34,7 @@ OUT = sys.argv[1]
 COUNT = int(sys.argv[2]) if len(sys.argv) > 2 else 20000
 random.seed(int(sys.argv[3]) if len(sys.argv) > 3 else 1)
 
-# Traditional versions (LIB-19) and later ones: the reference implementation never reads 1.002.
+# Traditional versions (LIB-19) and later ones: `nistitl` never reads 1.002.
 VERSIONS = ["0200", "0300", "0400", "0500", "0501", "0502", "0600"]
 SEPARATORS = b"\x1c\x1d\x1e\x1f"
 TEXTS = ["", "a", "TEST", "0", "07", " 1 ", "-3", "+4", "0_1", "x" * 40, "\xe9\xff", "1\xa0",

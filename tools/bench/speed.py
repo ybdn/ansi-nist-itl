@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Speed of reading and writing on a corpus with the reference implementation, to compare with the
+"""Speed of reading and writing on a corpus with `nistitl`, to compare with the
 crate (`examples/speed.rs` does the same in Rust; see `docs/SPEED.md`).
 
 Every file is loaded first; each pass then reads every file with

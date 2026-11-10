@@ -1,4 +1,4 @@
-//! `Serialize` and `Deserialize` on the model (SPEC §13.4, LIB-23), behind
+//! `Serialize` and `Deserialize` on the model (LIB-23), behind
 //! the `serde` feature.
 //!
 //! Values take their Python form (`Field::value()`), binary data base64 in
@@ -227,7 +227,7 @@ impl Serialize for Scalar {
     }
 }
 
-/// Reads a scalar, or a list of items when `nested` (SPEC §13.4).
+/// Reads a scalar, or a list of items when `nested`.
 struct ItemVisitor {
     nested: bool,
 }

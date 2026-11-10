@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Differential fuzzing against the reference implementation (SPEC §15.5, QA-02, QA-04): fuzz
+# Differential fuzzing against `nistitl` (QA-02, QA-04): fuzz
 # the parser, then replay the corpus the fuzzer produced in the oracle bench.
-# Any difference that SPEC §11 and §12 do not list is a bug of the crate.
+# Any difference that the documented deviations of the crate (extra errors, typed Python
+# exceptions) do not explain is a bug of the crate.
 #
 # Usage (from the repository root; local, not run by the CI):
 #

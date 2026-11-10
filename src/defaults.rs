@@ -1,5 +1,5 @@
 //! Values that the reference implementation draws from the clock when creating a Type-1 record
-//! (SPEC §8.1, §14.4): today's date and a transaction control number.
+//! (LIB-08): today's date and a transaction control number.
 
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};

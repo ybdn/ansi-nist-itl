@@ -1,4 +1,4 @@
-//! `%` and `str.format` conversions used by the reference implementation (SPEC §3.5).
+//! `%` and `str.format` conversions used by the reference implementation.
 
 use std::borrow::Cow;
 use std::fmt;
@@ -45,7 +45,7 @@ pub(crate) fn thousands(n: u64) -> String {
 /// A `printf` template applied to `(record, tag)`, like `Field.format` (`'%d.%03d:'`).
 ///
 /// Only literal text, `%%` and exactly two `%[0][width]d` conversions are
-/// supported (SPEC §3.5, §11).
+/// supported.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PrintfTemplate {
     source: Cow<'static, str>,

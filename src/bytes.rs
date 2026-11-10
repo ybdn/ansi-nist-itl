@@ -1,4 +1,4 @@
-//! Shared, immutable byte buffers (SPEC §14.6, LIB-05).
+//! Shared, immutable byte buffers (LIB-05).
 
 use std::fmt;
 use std::hash::{Hash, Hasher};

@@ -1,4 +1,4 @@
-//! Text and binary fields of a tagged record (SPEC §6, §7).
+//! Text and binary fields of a tagged record.
 
 use crate::RS;
 use crate::bytes::Bytes;
@@ -26,7 +26,7 @@ fn tag_number(tag: Scalar, record: u32) -> Result<PyInt> {
     })
 }
 
-/// Parses a tag format template (SPEC §3.5).
+/// Parses a tag format template.
 fn tag_format(format: &str, record: u32, tag: &PyInt) -> Result<PrintfTemplate> {
     PrintfTemplate::parse(format)
         .map_err(|e| Error::from(e).with_position(field_position(record, tag)))
@@ -45,7 +45,7 @@ fn field_position(record: u32, tag: &PyInt) -> Position {
 /// RS (`0x1E`) when written.
 ///
 /// The [`Kind`] restricts the content: `F` allows a non-empty scalar value,
-/// `S` subfields with a scalar value, `I` subfields with items (SPEC §6).
+/// `S` subfields with a scalar value, `I` subfields with items.
 /// The kind of the field is given to all its subfields.
 ///
 /// ```
@@ -485,7 +485,7 @@ impl Field {
 
 /// Binary field of a tagged record, such as the image data `999`.
 ///
-/// The value is kept as raw [`Bytes`], without copy nor check (SPEC §7).
+/// The value is kept as raw [`Bytes`], without copy nor check.
 ///
 /// ```
 /// use ansi_nist_itl::BinaryField;

@@ -1,4 +1,4 @@
-//! Edge cases of SPEC appendix C, checked against the reference implementation (§15.2).
+//! Edge cases of the reference implementation, checked against it (QA-02).
 //!
 //! One test per case: same values read, same bytes written, or same text
 //! for the error.
@@ -18,7 +18,7 @@ fn nist(value: impl Into<Value>) -> Vec<u8> {
     Field::new(2, 3, value).unwrap().to_bytes().unwrap()
 }
 
-// Helpers of appendix C.
+// Helpers.
 
 /// `rec(t, body, first)`: tagged record `t` whose LEN is computed; `first`
 /// is the tag of its first field.
@@ -127,7 +127,7 @@ fn type4() -> Vec<u8> {
     ])
 }
 
-// Reading numbers (§3.1, §10.8).
+// Reading numbers.
 
 #[test]
 fn c01_negative_idc() {
@@ -219,7 +219,7 @@ fn c14_utf8_read_as_latin1() {
     assert_eq!(text(&b, 5), Value::from("\u{c3}\u{a9}"));
 }
 
-// Reading the structure (§10.7–10.9).
+// Reading the structure.
 
 #[test]
 fn c15_unsorted_fields_rewritten() {
@@ -389,7 +389,7 @@ fn c35_five_extra_bytes() {
     );
 }
 
-// Reading LEN (§10.9).
+// Reading LEN.
 
 /// `T1() + R(2, b'2.002:1\x1d2.003:abc')`, of LEN 27.
 fn len27() -> Vec<u8> {
@@ -429,7 +429,7 @@ fn c38_len_too_large_at_end() {
     assert_eq!(p.offset, Some(t1().len()));
 }
 
-/// The records of C39 and C40.
+/// Two records, the LEN of the first replaced by `extra(len_a, len_b)`.
 fn two_records(extra: impl Fn(usize, usize) -> usize) -> Vec<u8> {
     let a = r(2, b"2.002:1\x1d2.003:a");
     let b = r(2, b"2.002:2\x1d2.003:b");
@@ -475,7 +475,7 @@ fn c42_last_record_without_fs_len_too_large() {
     );
 }
 
-// Reading CNT (§10.9–10.10).
+// Reading CNT.
 
 #[test]
 fn c43_wrong_type_only() {
@@ -550,7 +550,7 @@ fn c51_first_subfield_of_type_2() {
     );
 }
 
-// Reading the binary field 999 (§10.9).
+// Reading the binary field 999.
 
 /// `T14(b'14.002:1\x1d14.020:ok', data)`.
 fn t14_ok(data: &[u8]) -> Vec<u8> {
@@ -622,7 +622,7 @@ fn c59_type_2_with_2_999() {
     assert_eq!(text(&b, 999), Value::from("abc"));
 }
 
-// Reading binary records (§10.9).
+// Reading binary records.
 
 #[test]
 fn c60_type_4_rewritten_identically() {
@@ -702,7 +702,7 @@ fn c66_cnt_entry_without_item() {
     );
 }
 
-// Writing (§5–§10).
+// Writing.
 
 #[test]
 fn c67_record_reduced_to_len() {
@@ -837,7 +837,7 @@ fn c83_len_fixed_point() {
     assert_eq!(&r.to_bytes().unwrap()[..10], b"2.001:105\x1d");
 }
 
-// Text summary (§3.3, §8.9, §9.6).
+// Text summary.
 
 #[test]
 fn c84_string_repr() {
@@ -894,7 +894,7 @@ fn c88_unpack_too_long() {
     assert_eq!(e.to_string(), "unpack requires a buffer of 28 bytes");
 }
 
-// Message (§10.2–10.5).
+// Message.
 
 #[test]
 fn c89_type1_by_key() {
@@ -969,7 +969,7 @@ fn c96_unknown_record_type() {
     assert_eq!(e.to_string(), "100");
 }
 
-// Access by alias (§8.5–8.6).
+// Access by alias.
 
 /// `[f.tag for f in r._fields]`.
 fn tags(r: &AsciiRecord) -> Vec<String> {
@@ -1110,7 +1110,7 @@ fn c110_field_by_alias() {
     assert_eq!(r.field("LEN").unwrap().tag(), &PyInt::from(1));
 }
 
-// SubField (§5).
+// SubField.
 
 #[test]
 fn c111_list_of_items() {
@@ -1146,7 +1146,7 @@ fn c114_s_field_with_value() {
     );
 }
 
-// Reading numbers, complements (§3.1).
+// Reading numbers, complements.
 
 #[test]
 fn c115_long_invalid_idc() {

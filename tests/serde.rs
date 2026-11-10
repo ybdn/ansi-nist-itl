@@ -1,4 +1,4 @@
-//! Serialization with `serde` (SPEC §13.4, LIB-23): the JSON form, the round
+//! Serialization with `serde` (LIB-23): the JSON form, the round
 //! trip, and the checks of the deserialization.
 
 #![cfg(feature = "serde")]

@@ -1,4 +1,4 @@
-//! `int(str)` in base 10, as CPython 3.12 implements it (SPEC §3.1).
+//! `int(str)` in base 10, as CPython 3.12 implements it.
 //!
 //! CPython first maps the string to ASCII (`_PyUnicode_TransformDecimalAndSpaceToASCII`):
 //! non-ASCII white space becomes a space, non-ASCII decimal digits become

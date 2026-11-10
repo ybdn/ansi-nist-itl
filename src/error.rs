@@ -1,8 +1,8 @@
-//! Errors (SPEC §4.2–4.4).
+//! Errors (LIB-11).
 //!
 //! [`Error`] mirrors the exceptions of the reference implementation: a [`NistError`] code for
 //! `NistException`, and a dedicated [`ErrorKind`] for each Python exception
-//! that the reference implementation lets through (SPEC §12). [`Display`](fmt::Display) gives the
+//! that the reference implementation lets through. [`Display`](fmt::Display) gives the
 //! exact text of the Python exception; the [`Position`] is an addition that
 //! never appears in it.
 
@@ -99,7 +99,7 @@ impl fmt::Display for NistError {
 /// Category of an [`Error`].
 ///
 /// [`ErrorKind::Nist`] stands for `NistException`. The other variants stand
-/// for the Python exceptions that the reference implementation does not catch (SPEC §12): the
+/// for the Python exceptions that the reference implementation does not catch: the
 /// crate turns them into typed errors and keeps the Python message.
 ///
 /// ```
@@ -131,7 +131,7 @@ pub enum ErrorKind {
     TypeMismatch,
     /// `ValueError` of `min()` on an empty list: `min() iterable argument is empty`.
     EmptySequence,
-    /// Unsupported tag format template (only `%[0][n]d`, SPEC §3.5); no Python equivalent.
+    /// Unsupported tag format template (only `%[0][n]d`); no Python equivalent.
     BadFormat,
     /// I/O error of the file and reader helpers; no Python equivalent.
     Io(std::io::ErrorKind),
@@ -235,20 +235,20 @@ impl Error {
         self
     }
 
-    // Messages of SPEC §4.4, typos included. `%s` and `%d` become `Display`,
+    // Messages of the reference implementation, typos included. `%s` and `%d` become `Display`,
     // `%r` becomes `repr`.
 
-    /// BAD_RECORD (§10.7).
+    /// BAD_RECORD.
     pub(crate) fn bad_record() -> Self {
         Error::nist(NistError::BadRecord, "Invalid record data")
     }
 
-    /// BAD_TAG_NAME (§10.8).
+    /// BAD_TAG_NAME.
     pub(crate) fn illegal_tag_name(tag: impl fmt::Display) -> Self {
         Error::nist(NistError::BadTagName, format!("Illegal tag name {tag}"))
     }
 
-    /// BAD_TAG_FORMAT (§10.9).
+    /// BAD_TAG_FORMAT.
     pub(crate) fn illegal_tag_format(tag: impl fmt::Display, found: impl fmt::Display) -> Self {
         Error::nist(
             NistError::BadTagFormat,
@@ -256,7 +256,7 @@ impl Error {
         )
     }
 
-    /// BAD_RECORD_NUMBER raised by the parser (§10.8).
+    /// BAD_RECORD_NUMBER raised by the parser.
     pub(crate) fn illegal_record_number(tag: impl fmt::Display) -> Self {
         Error::nist(
             NistError::BadRecordNumber,
@@ -264,7 +264,7 @@ impl Error {
         )
     }
 
-    /// BAD_RECORD_NUMBER raised when adding a field (§8.2).
+    /// BAD_RECORD_NUMBER raised when adding a field.
     pub(crate) fn bad_record_number(
         record: impl fmt::Display,
         tag: impl fmt::Display,
@@ -276,7 +276,7 @@ impl Error {
         )
     }
 
-    /// BAD_CONTENT on a binary record (§10.9).
+    /// BAD_CONTENT on a binary record.
     pub(crate) fn unrecognized_binary_record() -> Self {
         Error::nist(
             NistError::BadContent,
@@ -284,7 +284,7 @@ impl Error {
         )
     }
 
-    /// BAD_CONTENT: CNT and records differ in number (§10.10).
+    /// BAD_CONTENT: CNT and records differ in number.
     pub(crate) fn cnt_record_count() -> Self {
         Error::nist(
             NistError::BadContent,
@@ -292,7 +292,7 @@ impl Error {
         )
     }
 
-    /// BAD_CONTENT: a CNT subfield has not two items (§10.10).
+    /// BAD_CONTENT: a CNT subfield has not two items.
     pub(crate) fn cnt_value_count(subfield: usize) -> Self {
         Error::nist(
             NistError::BadContent,
@@ -300,7 +300,7 @@ impl Error {
         )
     }
 
-    /// BAD_CONTENT: the first CNT subfield does not announce a Type-1 (§10.10).
+    /// BAD_CONTENT: the first CNT subfield does not announce a Type-1.
     pub(crate) fn cnt_record_type(subfield: usize) -> Self {
         Error::nist(
             NistError::BadContent,
@@ -308,7 +308,7 @@ impl Error {
         )
     }
 
-    /// BAD_CONTENT: a CNT subfield matches neither type nor IDC (§10.10).
+    /// BAD_CONTENT: a CNT subfield matches neither type nor IDC.
     pub(crate) fn cnt_record_type_or_idc(subfield: usize) -> Self {
         Error::nist(
             NistError::BadContent,
@@ -318,7 +318,7 @@ impl Error {
         )
     }
 
-    /// CANNOT_ADD_TYPE1 (§10.2).
+    /// CANNOT_ADD_TYPE1.
     pub(crate) fn cannot_add_type1() -> Self {
         Error::nist(
             NistError::CannotAddType1,
@@ -326,7 +326,7 @@ impl Error {
         )
     }
 
-    /// CANNOT_DELETE_TYPE1 (§10.4).
+    /// CANNOT_DELETE_TYPE1.
     pub(crate) fn cannot_delete_type1() -> Self {
         Error::nist(
             NistError::CannotDeleteType1,
@@ -334,7 +334,7 @@ impl Error {
         )
     }
 
-    /// RECORD_NOT_FOUND (§10.4).
+    /// RECORD_NOT_FOUND.
     pub(crate) fn record_not_found() -> Self {
         Error::nist(
             NistError::RecordNotFound,
@@ -342,7 +342,7 @@ impl Error {
         )
     }
 
-    /// RECORD_NOT_TERMINATED (§10.9).
+    /// RECORD_NOT_TERMINATED.
     pub(crate) fn record_not_terminated(record_type: impl fmt::Display) -> Self {
         Error::nist(
             NistError::RecordNotTerminated,
@@ -350,7 +350,7 @@ impl Error {
         )
     }
 
-    /// NIST_TOO_SHORT (§10.9).
+    /// NIST_TOO_SHORT.
     pub(crate) fn nist_too_short(record_type: impl fmt::Display) -> Self {
         Error::nist(
             NistError::NistTooShort,
@@ -358,12 +358,12 @@ impl Error {
         )
     }
 
-    /// NIST_TOO_LONG (§10.9).
+    /// NIST_TOO_LONG.
     pub(crate) fn nist_too_long() -> Self {
         Error::nist(NistError::NistTooLong, "NIST buffer too long (extra bytes)")
     }
 
-    /// BAD_TAG_DUPLICATE (§8.2).
+    /// BAD_TAG_DUPLICATE.
     pub(crate) fn tag_duplicate(tag: impl fmt::Display, record_type: impl fmt::Display) -> Self {
         Error::nist(
             NistError::BadTagDuplicate,
@@ -371,7 +371,7 @@ impl Error {
         )
     }
 
-    /// BAD_ALIAS_DUPLICATE (§8.2).
+    /// BAD_ALIAS_DUPLICATE.
     pub(crate) fn alias_duplicate(alias: &str, record_type: impl fmt::Display) -> Self {
         Error::nist(
             NistError::BadAliasDuplicate,
@@ -382,7 +382,7 @@ impl Error {
         )
     }
 
-    /// UNKNOWN_ATTRIBUTE raised by `set` (§8.5).
+    /// UNKNOWN_ATTRIBUTE raised by `set`.
     pub(crate) fn bad_attribute_set(name: &str, record_type: impl fmt::Display) -> Self {
         Error::nist(
             NistError::UnknownAttribute,
@@ -392,7 +392,7 @@ impl Error {
         )
     }
 
-    /// UNKNOWN_ATTRIBUTE raised by `get` (§8.6).
+    /// UNKNOWN_ATTRIBUTE raised by `get`.
     pub(crate) fn bad_attribute_get(name: &str, record_type: impl fmt::Display) -> Self {
         Error::nist(
             NistError::UnknownAttribute,
@@ -402,7 +402,7 @@ impl Error {
         )
     }
 
-    /// BAD_FIELD_VALUE: scalar value on a field without `F` (§6.3).
+    /// BAD_FIELD_VALUE: scalar value on a field without `F`.
     pub(crate) fn field_cannot_have_value(label: &str) -> Self {
         Error::nist(
             NistError::BadFieldValue,
@@ -410,7 +410,7 @@ impl Error {
         )
     }
 
-    /// BAD_FIELD_VALUE: list value on a field without `S` nor `I` (§6.3, §6.5).
+    /// BAD_FIELD_VALUE: list value on a field without `S` nor `I`.
     pub(crate) fn field_cannot_have_subfields(label: &str) -> Self {
         Error::nist(
             NistError::BadFieldValue,
@@ -418,7 +418,7 @@ impl Error {
         )
     }
 
-    /// BAD_SUBFIELD_VALUE: scalar value on a subfield without `S` (§5.3).
+    /// BAD_SUBFIELD_VALUE: scalar value on a subfield without `S`.
     pub(crate) fn subfield_cannot_have_value() -> Self {
         Error::nist(
             NistError::BadSubfieldValue,
@@ -426,12 +426,12 @@ impl Error {
         )
     }
 
-    /// BAD_SUBFIELD_VALUE: items on a subfield without `I` (§5.5).
+    /// BAD_SUBFIELD_VALUE: items on a subfield without `I`.
     pub(crate) fn subfield_cannot_have_items() -> Self {
         Error::nist(NistError::BadSubfieldValue, "Subfield cannot have items")
     }
 
-    /// BAD_SUBFIELD_VALUE: subfield with items added to a field without `I` (§6.5).
+    /// BAD_SUBFIELD_VALUE: subfield with items added to a field without `I`.
     pub(crate) fn subfield_of_cannot_have_items(label: &str) -> Self {
         Error::nist(
             NistError::BadSubfieldValue,
@@ -439,7 +439,7 @@ impl Error {
         )
     }
 
-    /// BAD_SUBFIELD_VALUE: subfield with a value added to a field without `S` (§6.5).
+    /// BAD_SUBFIELD_VALUE: subfield with a value added to a field without `S`.
     ///
     /// `value_repr` is the `repr` of the subfield value.
     pub(crate) fn subfield_of_cannot_have_value(label: &str, value_repr: &str) -> Self {
@@ -455,7 +455,7 @@ impl Error {
         Error::new(ErrorKind::UnknownRecordType(record_type), message)
     }
 
-    /// `ValueError` of `min()` on an empty sequence (§10.9).
+    /// `ValueError` of `min()` on an empty sequence.
     pub(crate) fn empty_sequence() -> Self {
         Error::new(ErrorKind::EmptySequence, "min() iterable argument is empty")
     }
@@ -486,7 +486,7 @@ impl Error {
         Error::new(kind, format!("object of type '{class}' has no len()"))
     }
 
-    /// A typed header asked of a binary record of another type (SPEC §13.3).
+    /// A typed header asked of a binary record of another type (LIB-03).
     pub(crate) fn header_type(header: &str, record_type: u32, types: &str) -> Self {
         Error::nist(
             NistError::BadContent,
@@ -494,7 +494,7 @@ impl Error {
         )
     }
 
-    /// A binary record too short for its typed header (SPEC §13.3).
+    /// A binary record too short for its typed header (LIB-03).
     pub(crate) fn header_too_short(record_type: u32, len: usize, needed: usize) -> Self {
         Error::nist(
             NistError::BadContent,
@@ -545,12 +545,12 @@ impl Error {
     }
 
     /// `TypeError` of `bytes + int`: a binary field given the length of its
-    /// record (SPEC §8.8).
+    /// record.
     pub(crate) fn concat_int_to_bytes() -> Self {
         Error::new(ErrorKind::TypeMismatch, "can't concat int to bytes")
     }
 
-    /// Text value given to a binary field (SPEC §11): no Python counterpart.
+    /// Text value given to a binary field: no Python counterpart.
     pub(crate) fn binary_field_value(tag: impl fmt::Display) -> Self {
         Error::new(
             ErrorKind::TypeMismatch,
@@ -558,7 +558,7 @@ impl Error {
         )
     }
 
-    /// Bytes given to, or read from, a text field (SPEC §11): no Python
+    /// Bytes given to, or read from, a text field: no Python
     /// counterpart.
     pub(crate) fn text_field_value(tag: impl fmt::Display) -> Self {
         Error::new(
@@ -615,7 +615,7 @@ impl fmt::Display for Warning {
     }
 }
 
-/// Kind of a [`Diagnostic`] of the tolerant mode (SPEC §13.2).
+/// Kind of a [`Diagnostic`] of the tolerant mode (LIB-13).
 ///
 /// ```
 /// use ansi_nist_itl::{DiagnosticCode, Message, ParseOptions};
@@ -664,7 +664,7 @@ pub enum DiagnosticCode {
     CntMismatch,
     /// No CNT, or no Type-1 first: an empty Type-1 heads the records read.
     MissingType1,
-    /// The data label was found in a text value (SPEC E3).
+    /// The data label was found in a text value (quirk E3 of the reference implementation).
     DataTagInText,
     /// The last byte of a record with data is not FS; it is dropped (E4).
     MissingFinalFs,
@@ -691,7 +691,7 @@ pub enum Severity {
 }
 
 /// A problem met by the tolerant mode, and how it was overcome
-/// (SPEC §13.2).
+/// (LIB-13).
 ///
 /// `message` is the text of the error that the reference implementation would have raised;
 /// `Display` gives the severity, the code and this text.
@@ -799,7 +799,7 @@ mod tests {
         }
     }
 
-    /// Every message of SPEC §4.4, compared with the text printed by the reference implementation.
+    /// Every message, compared with the text printed by the reference implementation.
     #[test]
     fn messages() {
         let cases: Vec<(Error, &str)> = vec![
@@ -980,7 +980,7 @@ mod tests {
 
     #[test]
     fn source_chain() {
-        // `raise future_exc from exc` (§10.9).
+        // `raise future_exc from exc`.
         let e = Error::nist_too_short(2).with_source(Error::bad_record());
         assert_eq!(
             e.to_string(),

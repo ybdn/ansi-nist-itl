@@ -1,4 +1,4 @@
-//! Validation against the standard (LIB-16, SPEC §13.9).
+//! Validation against the standard (LIB-16).
 
 #![cfg(feature = "validation")]
 

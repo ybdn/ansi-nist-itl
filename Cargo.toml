@@ -1,11 +1,12 @@
 [package]
 name = "ansi-nist-itl"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2024"
 rust-version = "1.85"
-description = "Read, write and validate ANSI/NIST-ITL biometric files (NIST, EBTS, INT-I), byte for byte compatible with the reference implementation"
+description = "Read, write and validate ANSI/NIST-ITL biometric files (NIST, EBTS, INT-I), byte for byte compatible with nistitl 0.6 (IDEMIA)"
 license = "MIT"
-repository = "https://github.com/ybdn/ansi-nist-itl"
+repository = "https://github.com/ybdn-ei/ansi-nist-itl"
+homepage = "https://github.com/ybdn-ei/ansi-nist-itl"
 documentation = "https://docs.rs/ansi-nist-itl"
 readme = "README.md"
 keywords = ["nist", "biometrics", "fingerprint", "ansi-nist-itl", "ebts"]
@@ -35,11 +36,11 @@ harness = false
 
 [features]
 default = ["local-date"]
-# Today's date in local time, as `datetime.today()` (SPEC §8.1); UTC without it.
+# Today's date in local time, as `datetime.today()`; UTC without it.
 local-date = ["dep:chrono"]
-# Serialize and Deserialize on the model (SPEC §13.4).
+# Serialize and Deserialize on the model (LIB-23).
 serde = ["dep:serde"]
-# Field dictionary of the standard (SPEC §13.6).
+# Field dictionary of the standard (LIB-15).
 dictionary = []
-# Validation against the standard (SPEC §13.9).
+# Validation against the standard (LIB-16).
 validation = ["dictionary"]
