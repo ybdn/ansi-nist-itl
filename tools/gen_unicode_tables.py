@@ -2,7 +2,7 @@
 """Generate src/py/unicode_tables.rs from CPython 3.12 (SPEC §3.6).
 
 The tables mirror the Unicode database compiled into CPython 3.12, which is
-what the reference implementation sees at run time: `str.isspace`, `str.isprintable` and the
+what `nistitl` sees at run time: `str.isspace`, `str.isprintable` and the
 decimal digits (category Nd) accepted by `int()`.
 
 Usage (from the repository root):

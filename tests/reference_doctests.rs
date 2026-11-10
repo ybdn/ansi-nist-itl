@@ -1,4 +1,4 @@
-//! Examples of the the reference implementation docstrings, ported one test per docstring (QA-01).
+//! Examples of `nistitl` docstrings, ported one test per docstring (QA-01).
 //!
 //! Each `>>>` line becomes the equivalent call; outputs and exception texts
 //! are compared as printed by Python.

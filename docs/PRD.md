@@ -142,7 +142,7 @@ Les fichiers réels (corpus de la v1, `nist-files/`) contiennent des **données 
 
 ## 7. Licence et propriété intellectuelle
 
-- **Licence** : **MIT** (décidé le 2026-11-02, remplace une décision antérieure). Fichier `LICENSE` ; `license = "MIT"` dans `Cargo.toml`.
+- **Licence** : **MIT** (décidé le 2026-11-02, remplace une décision antérieure ; confirmée le 2026-11-10, #78). Fichier `LICENSE` ; `license = "MIT"` dans `Cargo.toml`. `nistitl` (IDEMIA, CeCILL-C) est cité comme référence de compatibilité : oracle de test uniquement, ni distribué ni dépendance.
 - **Nom** : pas de reprise du nom la référence.
 
 - **Titulaire du copyright** : ybdn, à titre personnel.
