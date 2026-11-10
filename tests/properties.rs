@@ -1,4 +1,4 @@
-//! Properties of the writing and the reading (SPEC §15.4, QA-03, QA-05).
+//! Properties of the writing and the reading (QA-03, QA-05).
 //!
 //! Messages are generated through the API, in the forms that the reference implementation
 //! reads back as written: Latin-1 text without separators nor `999:`,
@@ -50,7 +50,7 @@ fn value() -> impl Strategy<Value = Value> {
 }
 
 /// Tags of the extra fields: not LEN, IDC nor 999, and no label ending in
-/// `999:` (SPEC E3).
+/// `999:` (quirk E3 of the reference implementation).
 fn tags() -> impl Strategy<Value = Vec<u32>> {
     btree_set(3u32..2_000, 0..6).prop_map(|tags| {
         tags.into_iter()
@@ -161,7 +161,7 @@ proptest! {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(512))]
 
-    /// JSON, then back: the same message, the same bytes (SPEC §13.4).
+    /// JSON, then back: the same message, the same bytes (LIB-23).
     #[test]
     fn json_round_trip(mut msg in message()) {
         let json = serde_json::to_string(&msg).unwrap();

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generate src/alias/names.rs: one constant per distinct alias of
-nistitl.ALIASES (SPEC §14.1, LIB-07), in order of first appearance.
+nistitl.ALIASES (LIB-07), in order of first appearance.
 
-Usage (from the repository root, with the reference implementation importable):
+Usage (from the repository root, with `nistitl` importable):
 
     python3.12 tools/gen_alias_names.py > src/alias/names.rs
     cargo fmt

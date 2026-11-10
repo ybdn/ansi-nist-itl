@@ -1,4 +1,4 @@
-//! Lexer of tagged records (`parse_record`, SPEC §10.7) and the patterns of
+//! Lexer of tagged records (`parse_record`) and the patterns of
 //! the reference implementation (`RE_TAG_LEN`, `RE_TAG_BEGIN`, `RE_TAG_CONTENT`).
 
 use crate::error::{Error, Result};

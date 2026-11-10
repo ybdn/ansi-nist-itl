@@ -1,4 +1,4 @@
-//! Tolerant mode (SPEC §13.2, LIB-13): every error of the strict mode
+//! Tolerant mode (LIB-13): every error of the strict mode
 //! becomes a diagnostic with its recovery, and the parsing goes on.
 
 use DiagnosticCode::*;
@@ -6,7 +6,7 @@ use ansi_nist_itl::{
     AnyField, Diagnostic, DiagnosticCode, Message, ParseOptions, Parsed, Severity, Value,
 };
 
-/// `rec(t, body, first)` of SPEC appendix C.
+/// `rec(t, body, first)` as in `tests/reference_edge_cases.rs`.
 fn rec_with(t: u32, body: &[u8], first: u32) -> Vec<u8> {
     let head = format!("{t}.{first:03}:");
     (1..100_000)
@@ -78,7 +78,7 @@ fn same_message_as_strict(buffer: &[u8], parsed: &Parsed) {
 
 #[test]
 fn truncated_record_is_kept() {
-    // C38: LEN too large at the end.
+    // LEN too large at the end.
     let full = [t1(), r(2, b"2.002:1\x1d2.003:abc")].concat();
     let b = String::from_utf8(full)
         .unwrap()
@@ -92,7 +92,7 @@ fn truncated_record_is_kept() {
 
 #[test]
 fn len_too_small_extends_the_record() {
-    // C36.
+    // LEN too small.
     let full = [t1(), r(2, b"2.002:1\x1d2.003:abc")].concat();
     let b = String::from_utf8(full)
         .unwrap()
@@ -104,7 +104,7 @@ fn len_too_small_extends_the_record() {
 
 #[test]
 fn bad_field_is_skipped() {
-    // C21 and C22.
+    // An empty field, and a malformed tag.
     for fields in [
         &b"2.002:1\x1d\x1d2.004:a"[..],
         b"2.002:1\x1d2.:x\x1d2.004:a",
@@ -120,7 +120,7 @@ fn bad_field_is_skipped() {
 
 #[test]
 fn field_of_another_type_is_kept() {
-    // C20.
+    // A tag of another record than the one it is in.
     let b = [t1(), r(2, b"2.002:1\x1d3.004:a")].concat();
     let parsed = tolerant(&b);
     assert_eq!(codes(&parsed), [(TagRecordMismatch, Severity::Warning)]);
@@ -130,13 +130,13 @@ fn field_of_another_type_is_kept() {
 
 #[test]
 fn duplicate_replaces_the_first() {
-    // C18.
+    // A tag repeated in the record.
     let b = [t1(), r(2, b"2.002:1\x1d2.003:a\x1d2.003:b")].concat();
     let parsed = tolerant(&b);
     assert_eq!(codes(&parsed), [(DuplicateTag, Severity::Warning)]);
     same_message_as_strict(&b, &parsed);
     assert_eq!(field(&parsed, 1, 3), Value::from("b"));
-    // The second Type-1 of C30 is merged into the first.
+    // The second of two Type-1 records is merged into the first.
     let b = [t1_cnt(b"1\x1f0"), t1_cnt(b"1\x1f0")].concat();
     let parsed = tolerant(&b);
     assert!(codes(&parsed).iter().all(|&(c, _)| c == DuplicateTag));
@@ -145,7 +145,7 @@ fn duplicate_replaces_the_first() {
 
 #[test]
 fn bad_data_tag_reads_the_record_as_text() {
-    // C58.
+    // A malformed tag before the data field.
     let b = [
         t1_cnt(b"1\x1f1\x1e14\x1f1"),
         rec(14, b"14.002:1\x1dX999:abc\x1c"),
@@ -165,7 +165,7 @@ fn bad_data_tag_reads_the_record_as_text() {
 
 #[test]
 fn invalid_numbers_stay_text() {
-    // C08, C115–C117.
+    // Invalid IDC values.
     for idc in [
         b"A".to_vec(),
         vec![b'A'; 300],
@@ -187,7 +187,7 @@ fn invalid_numbers_stay_text() {
 
 #[test]
 fn unknown_type_is_read_without_aliases() {
-    // C28 and C29.
+    // A Type-50 record with a 999 field, and a Type-4 record written as tagged.
     for (cnt, record) in [
         (&b"1\x1f1\x1e50\x1f1"[..], r(50, b"50.002:1\x1d50.999:x")),
         (b"1\x1f1\x1e4\x1f1", r(4, b"4.002:1")),
@@ -204,7 +204,7 @@ fn unknown_type_is_read_without_aliases() {
 
 #[test]
 fn unknown_binary_record_stops() {
-    // C35, C62, C63, C64.
+    // Unreadable binary records: junk, a type the CNT does not announce, LEN 0, LEN too small.
     let cases: [Vec<u8>; 4] = [
         [t1_cnt(b"1\x1f0"), vec![0; 5]].concat(),
         [
@@ -238,7 +238,7 @@ fn unknown_binary_record_stops() {
 
 #[test]
 fn binary_record_of_a_tagged_type_is_kept() {
-    // C65.
+    // A binary record of a tagged type (Type-2).
     let b = [t1(), 9u32.to_be_bytes().to_vec(), b"\x01data".to_vec()].concat();
     let parsed = tolerant(&b);
     assert_eq!(codes(&parsed), [(UnexpectedBinaryRecord, Severity::Error)]);
@@ -249,7 +249,7 @@ fn binary_record_of_a_tagged_type_is_kept() {
 
 #[test]
 fn truncated_binary_record_is_kept() {
-    // C61.
+    // A binary record truncated inside its image data.
     let full = [
         t1_cnt(b"1\x1f1\x1e4\x1f3"),
         23u32.to_be_bytes().to_vec(),
@@ -268,7 +268,7 @@ fn truncated_binary_record_is_kept() {
 
 #[test]
 fn unterminated_record_extends_to_the_end() {
-    // C41.
+    // A field running past the end of its record.
     let b = [t1(), b"2.001:15\x1d2.002:1abcde".to_vec()].concat();
     let parsed = tolerant(&b);
     let found = codes(&parsed);
@@ -279,7 +279,7 @@ fn unterminated_record_extends_to_the_end() {
 
 #[test]
 fn trailing_bytes_are_kept() {
-    // C33, C34.
+    // Bytes left after the last record.
     let parsed = tolerant(b"1.00");
     assert!(codes(&parsed).contains(&(TrailingBytes, Severity::Warning)));
     assert_eq!(parsed.message.trailing(), b"1.00");
@@ -292,7 +292,7 @@ fn trailing_bytes_are_kept() {
 
 #[test]
 fn cnt_mismatch_is_a_warning() {
-    // C45, C47, C49, C50, C51, C66.
+    // A CNT that does not match the records.
     for b in [
         [t1_cnt(b"1\x1f1\x1e9\x1f7"), r(2, b"2.002:1")].concat(),
         t1_cnt(b"1\x1f1\x1e2\x1f1"),
@@ -308,7 +308,7 @@ fn cnt_mismatch_is_a_warning() {
 
 #[test]
 fn missing_type1() {
-    // C31, C32, C48.
+    // No Type-1 record first.
     for b in [
         r(2, b"2.002:1"),
         Vec::new(),

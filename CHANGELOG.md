@@ -6,12 +6,37 @@ All notable changes to this crate are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-11-10
+
+### Changed
+
+- License: the crate is licensed under the MIT license (`LICENSE`, `license = "MIT"`) instead of
+  CeCILL-C, which is what versions up to 1.0.1 declare. The change was made in the repository on
+  2026-11-02 and is first released here. The maintainer decided to keep MIT after reviewing the
+  license of `nistitl` (IDEMIA, CeCILL-C): `ansi-nist-itl` is an independent reimplementation in
+  Rust, and `nistitl` is only used as an oracle at test time (it is not distributed with the
+  crate and is not a dependency). Releases up to 1.0.1 stay available under their original license.
+- Attribution restored: the README, the documentation and the package description name `nistitl`
+  0.6 by IDEMIA, with a link to https://github.com/idemia/python-nistitl, as the compatibility
+  reference of the crate (new "Compatibility reference" section of the README). The 2026-11-02
+  change had replaced its name by "the reference implementation".
+
 ### Documentation
 
 - README: drops the outdated pre-1.0 status block, adds the intended audience and a "Limits" section; the claim about malformed input in the reference implementation is removed (not measured).
 - README: links to files excluded from the package (`docs/`, `tools/`) are absolute, so they work on crates.io and docs.rs.
 - `Cargo.toml`: `homepage` added.
 - README: "Decoding a WSQ image", an example that decodes field 999 of a Type-14 with `wsq-codec`, a dependency of the application, not of this crate.
+- README: "Limits" completed (UTF-16 and UTF-32 planned in 1.x, XML/NIEM considered for a 2.x, only the EBTS 11.2 and INT-I 5.03 profiles bundled).
+- References to the former specification document (`SPEC §…`) replaced, in comments and tool documentation, by the identifiers of the requirements of `docs/PRD.md` or by a self-contained description. `docs/PRD.md` is now a reference document, dated 2026-11-10, with the status of each requirement.
+- README: "Portability" states what CI really covers: Linux only.
+
+### Continuous integration
+
+- Tests run on the MSRV (Rust 1.85), not only `cargo check`.
+- Oracle bench on CPython 3.12.16 installed by uv 0.13.6; uv and `nistitl` 0.6 are pinned by SHA-256 (`tools/oracle/requirements*.txt`).
+- Short fuzzing pass (one minute per target) on pull requests, besides the weekly long run.
+- CI also runs on pushes to `main`; the README badge follows `main`.
 
 ## [1.0.1] - 2026-11-02
 
@@ -47,11 +72,11 @@ Stable API: no breaking change before 2.0.
 
 ### Documentation
 
-- README rewritten: comparison with the reference implementation, quick start, guarantees, performance; its Rust
+- README rewritten: comparison with `nistitl`, quick start, guarantees, performance; its Rust
   examples compile as doctests. `examples/inspect.rs`: summary and validation of a file from the
   command line. `CONTRIBUTING.md`, `SECURITY.md`, issue and pull request templates.
 
-- `docs/SPEED.md`: speed compared with the reference implementation on the same corpora (3 to 4 times faster on
+- `docs/SPEED.md`: speed compared with `nistitl` on the same corpora (3 to 4 times faster on
   usual messages, equal on large images), with `examples/speed.rs`, `tools/bench/speed.py` and
   `tools/bench/gen_messages.py` to reproduce it.
 
@@ -84,13 +109,13 @@ Stable API: no breaking change before 2.0.
 
 ## [0.1.0] - 2026-10-21
 
-First release: parity with the reference implementation.
+First release: parity with `nistitl` 0.6.
 
 ### Added
 
 - Python value model (`Scalar`, `PyInt`, `Value`, `Item`, `Kind`) and the conversions of
-  CPython 3.12 that the reference implementation relies on (`int()`, `str()`, `repr()`, formatting).
-- `SubField`, `Field`, `BinaryField`, `AnyField`, with the checks and writing of the reference implementation.
+  CPython 3.12 that `nistitl` relies on (`int()`, `str()`, `repr()`, formatting).
+- `SubField`, `Field`, `BinaryField`, `AnyField`, with the checks and writing of `nistitl`.
 - `AsciiRecord`: creation (Type-1 date and TCN, injectable through `Defaults`), fields by tag or
   alias, `get`/`set` with the `_N` syntax, sorting, LEN fixed point, summary.
 - Python's `struct` language (`StructValue`) and `BinaryRecord`, with `pack` / `unpack`;
@@ -99,13 +124,14 @@ First release: parity with the reference implementation.
   `from_reader`, `from_path`; the public lexer `parse_record` and `RecordVisitor`.
 - `Message::to_bytes_exact`: exact writing of what was read.
 - `ParseOptions::tolerant`: tolerant mode with `Diagnostic`s and `Message::trailing`.
-- Constants of the `alias` module, one per alias of the reference implementation.
-- Typed errors (`Error`, `ErrorKind`, `NistError`) with the messages of the reference implementation and a
+- Constants of the `alias` module, one per alias of `nistitl`.
+- Typed errors (`Error`, `ErrorKind`, `NistError`) with the messages of `nistitl` and a
   `Position` (record, tag, byte offset).
-- Oracle bench against the reference implementation, fuzz targets, property tests, guard against committing
+- Oracle bench against `nistitl` 0.6, fuzz targets, property tests, guard against committing
   real NIST files.
 
-[Unreleased]: https://github.com/ybdn/ansi-nist-itl/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/ybdn/ansi-nist-itl/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/ybdn/ansi-nist-itl/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ybdn/ansi-nist-itl/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ybdn/ansi-nist-itl/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/ybdn/ansi-nist-itl/compare/v0.1.0...v0.2.0

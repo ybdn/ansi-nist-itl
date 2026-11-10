@@ -22,7 +22,7 @@
   <text x="80" y="275" font-family="Helvetica, Arial, sans-serif" font-size="34" fill="#cbd5e1">Read, write and validate ANSI/NIST-ITL</text>
   <text x="80" y="320" font-family="Helvetica, Arial, sans-serif" font-size="34" fill="#cbd5e1">biometric files in Rust</text>
   <g font-family="Helvetica, Arial, sans-serif" font-size="27" fill="#f8fafc">
-    <text x="80" y="410">✓ byte for byte compatible with the reference implementation</text>
+    <text x="80" y="410">✓ byte for byte compatible with nistitl</text>
     <text x="80" y="455">✓ 3–4× faster</text>
     <text x="80" y="500">✓ NIST · FBI EBTS 11.2 · INTERPOL INT-I</text>
   </g>

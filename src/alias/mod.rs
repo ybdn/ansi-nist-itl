@@ -1,5 +1,4 @@
-//! Aliases of the fields, as the reference implementation defines them (`ALIASES`, SPEC
-//! §4.5, annex A, LIB-07).
+//! Aliases of the fields, as the reference implementation defines them (`ALIASES`, LIB-07).
 //!
 //! A field added to a record without alias takes the alias of its tag in
 //! the table of the record type. One constant is defined per distinct
@@ -95,7 +94,7 @@ mod tests {
 
     #[test]
     fn data_alias() {
-        // SPEC §4.5: DATA is the only binary alias, always at 999.
+        // DATA is the only binary alias, always at 999.
         let with_data: Vec<u32> = ALIASES
             .iter()
             .filter(|&&(_, t)| tag_of(t, DATA).is_some())

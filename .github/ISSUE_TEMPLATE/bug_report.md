@@ -8,7 +8,7 @@ labels: bug
 
 **What happens**
 
-**What you expected** (what the reference implementation does, if you know)
+**What you expected** (what `nistitl` 0.6 does, if you know)
 
 **How to reproduce**
 

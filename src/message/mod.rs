@@ -1,4 +1,4 @@
-//! Messages: a Type-1 record followed by the other records (SPEC §10).
+//! Messages: a Type-1 record followed by the other records.
 
 mod exact;
 mod io;
@@ -68,9 +68,9 @@ fn at_record(index: usize) -> impl Fn(Error) -> Error {
 pub struct Message {
     records: Vec<Record>,
     /// Type and IDC of each record as read, for the exact writing
-    /// (SPEC §13.1).
+    /// (LIB-12).
     layout: Option<Vec<(u32, Option<Value>)>>,
-    /// Bytes after the records, kept by the tolerant mode (SPEC §13.2).
+    /// Bytes after the records, kept by the tolerant mode (LIB-13).
     trailing: Bytes,
 }
 
@@ -114,7 +114,7 @@ impl Message {
     }
 
     /// [`Message::new`], taking the date and the transaction control number
-    /// from `defaults` (SPEC §14.4).
+    /// from `defaults` (LIB-08).
     ///
     /// ```
     /// use ansi_nist_itl::{Defaults, Message, Value};
@@ -235,7 +235,7 @@ impl Message {
     }
 
     /// Bytes after the last record, that the tolerant mode could not read
-    /// (SPEC §13.2); empty otherwise. [`to_bytes_exact`](Message::to_bytes_exact)
+    /// (LIB-13); empty otherwise. [`to_bytes_exact`](Message::to_bytes_exact)
     /// writes them back, [`to_bytes`](Message::to_bytes) does not.
     ///
     /// ```
@@ -639,7 +639,7 @@ impl Message {
     }
 }
 
-/// `msg.CNT` (SPEC §10.5): rebuilds the CNT of `first` from the records
+/// `msg.CNT`: rebuilds the CNT of `first` from the records
 /// that follow it.
 pub(crate) fn rebuild_cnt<'a>(first: &'a mut Record, rest: &[Record]) -> Result<&'a Field> {
     let field = match first {

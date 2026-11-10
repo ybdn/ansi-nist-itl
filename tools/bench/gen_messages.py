@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Realistic synthetic messages for `speed.py` and `examples/speed.rs`, built
-by the reference implementation (no real data: values are invented, images are random bytes).
+by `nistitl` (no real data: values are invented, images are random bytes).
 
 Writes three directories into `<dir>`:
 

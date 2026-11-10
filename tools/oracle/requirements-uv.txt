@@ -1,0 +1,6 @@
+# uv, which installs the pinned CPython of the oracle bench in the CI (see README.md):
+#   python3 -m pip install --require-hashes --only-binary :all: -r tools/oracle/requirements-uv.txt
+# uv has no dependencies. Hash: sha256 of the x86_64 Linux wheel of the runner
+# (ubuntu-latest), from https://pypi.org/pypi/uv/0.13.6/json
+uv==0.13.6 \
+    --hash=sha256:22759b8895e1103578de6fb4cd27e94b4399d021023378d29f01333717751fba

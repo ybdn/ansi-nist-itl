@@ -1,4 +1,4 @@
-//! Tagged records (SPEC §8).
+//! Tagged records.
 
 use std::fmt;
 use std::sync::Arc;
@@ -122,7 +122,7 @@ fn underscore_tag(name: &str) -> Option<PyInt> {
     name.strip_prefix('_').and_then(|n| py_int(n).ok())
 }
 
-/// One line of the summary of a record (SPEC §8.9).
+/// One line of the summary of a record.
 fn summary_line(field: &AnyField) -> String {
     let value = match field {
         AnyField::Text(f) => f.value().to_string(),
@@ -181,13 +181,13 @@ pub struct AsciiRecord {
     /// Shared with the origin until the first change (copy on write).
     fields: Arc<Vec<AnyField>>,
     autosort: bool,
-    /// What the parsing read, for the exact writing (SPEC §13.1).
+    /// What the parsing read, for the exact writing (LIB-12).
     origin: Option<Box<AsciiOrigin>>,
     /// Read by the tolerant mode with an unknown type: no alias table.
     untabled: bool,
 }
 
-/// Bytes of a field as read, for the exact writing (SPEC §13.1).
+/// Bytes of a field as read, for the exact writing (LIB-12).
 #[derive(Debug, Clone)]
 pub(crate) struct RawField {
     pub(crate) tag: PyInt,
@@ -265,7 +265,7 @@ impl AsciiRecord {
     }
 
     /// [`AsciiRecord::with`], taking the date and the transaction control
-    /// number of a Type-1 from `defaults` (SPEC §14.4).
+    /// number of a Type-1 from `defaults` (LIB-08).
     ///
     /// ```
     /// use ansi_nist_itl::{AsciiRecord, Defaults};
@@ -916,7 +916,7 @@ impl AsciiRecord {
         self.fields.iter().position(|f| f.alias() == alias::CNT)
     }
 
-    /// Bytes of the record for `Message::to_bytes_exact` (SPEC §13.1): the
+    /// Bytes of the record for `Message::to_bytes_exact` (LIB-12): the
     /// fields in their current order, each with the bytes read when it is
     /// unchanged, its label as read otherwise; LEN recomputed. The CNT of a
     /// Type-1 keeps its bytes unless `cnt_rebuilt`.
@@ -960,7 +960,7 @@ impl AsciiRecord {
             Some(raw) => raw.label.to_vec(),
             None => first.label_bytes()?,
         };
-        // The fixed point of `to_bytes` (SPEC §8.8), without changing the
+        // The fixed point of `to_bytes`, without changing the
         // record.
         let mut length = 0usize;
         let mut last = None;
@@ -981,7 +981,7 @@ impl AsciiRecord {
     }
 
     /// An empty record of a type absent from the alias table, whose fields
-    /// get no alias (tolerant mode, SPEC §13.2).
+    /// get no alias (tolerant mode, LIB-13).
     pub(crate) fn untabled(record_type: u32) -> Self {
         AsciiRecord {
             record_type,
