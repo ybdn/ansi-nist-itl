@@ -173,7 +173,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   See [`tools/oracle/README.md`](https://github.com/ybdn-ei/ansi-nist-itl/blob/develop/tools/oracle/README.md).
 - **Robustness**: three fuzz targets (parsing, exact writing, tolerant mode) run in CI; no
   `unsafe`; property tests.
-- **Portability**: tested on Linux in CI (no platform-specific code: pure Rust, no `unsafe`, no I/O); Rust 1.85 or later; works on `&[u8]`
+- **Portability**: pure Rust, no `unsafe`, no I/O; tested on Linux in CI (macOS and Windows are not tested in CI); Rust 1.85 or later; works on `&[u8]`
   assumptions.
 - **Data protection**: biometric files are personal data. The repository holds synthetic test
   data only, and a CI job refuses NIST files outside them.
