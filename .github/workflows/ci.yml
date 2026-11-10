@@ -1,10 +1,19 @@
-# Pull requests into develop/main only: a merge replays nothing, the PR was
-# checked. `changes` classifies the diff; every job is skipped when its files
-# did not change, and `ci` is the one status to require. On a release
-# (workflow_call) everything runs. Fuzzing and advisories: scheduled.yml.
+# Pull requests into develop/main only: a merge into develop replays nothing, the
+# PR was checked. `main` only receives releases, so it alone also runs on push:
+# the CI badge of the README follows it and needs runs on that branch. `changes`
+# classifies the diff; every job is skipped when its files did not change, and
+# `ci` is the one status to require. On a push, a release (workflow_call) or a
+# manual run everything runs.
+#   core        shared workflow: tests, clippy, rustfmt, docs, MSRV 1.85 (cargo check only)
+#   msrv-test   the tests themselves on Rust 1.85
+#   oracle      comparison with nistitl 0.6 on CPython 3.12.16 (tools/oracle/README.md)
+#   fuzz        one minute per fuzz target, from a synthetic seed corpus
+# The long fuzzing (about twenty minutes) and the advisories: scheduled.yml.
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [develop, main]
   workflow_call:
@@ -62,6 +71,23 @@ jobs:
       feature-sets: '["", "--all-features"]'
     secrets: inherit
 
+  # `core` only runs `cargo check` on the MSRV: this job runs the tests on it.
+  msrv-test:
+    name: Tests on the MSRV (1.85)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: "1.85"
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo test --lib --tests
+      - run: cargo test --lib --tests --all-features
+      - run: cargo test --doc
+
   bench:
     name: Benchmarks (build)
     needs: changes
@@ -84,21 +110,30 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - run: python -m pip install nistitl==0.6
+      # uv 0.13.6, then CPython 3.12.16 and nistitl 0.6, all from files with
+      # hashes (tools/oracle/requirements*.txt): nothing floats.
+      - name: Install uv
+        run: |
+          python3 -m venv "$RUNNER_TEMP/uv"
+          "$RUNNER_TEMP/uv/bin/python" -m pip install --require-hashes --only-binary :all: -r tools/oracle/requirements-uv.txt
+          echo "$RUNNER_TEMP/uv/bin" >> "$GITHUB_PATH"
+      - name: Install CPython 3.12.16 and nistitl
+        run: |
+          uv python install 3.12.16
+          uv venv --python 3.12.16 "$RUNNER_TEMP/oracle"
+          uv pip install --python "$RUNNER_TEMP/oracle" --require-hashes --only-binary :all: -r tools/oracle/requirements.txt
+          "$RUNNER_TEMP/oracle/bin/python" -c 'import sys; assert sys.version_info[:3] == (3, 12, 16), sys.version'
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Synthetic corpus (seed = run number)
-        run: python -I tools/oracle/gen_corpus.py "$RUNNER_TEMP/corpus" 20000 "$GITHUB_RUN_NUMBER"
+        run: $RUNNER_TEMP/oracle/bin/python -I tools/oracle/gen_corpus.py "$RUNNER_TEMP/corpus" 20000 "$GITHUB_RUN_NUMBER"
       - name: Compare with nistitl
         run: cargo test --release --test oracle
         env:
           ANSI_NIST_ITL_CORPUS: ${{ runner.temp }}/corpus
-          ANSI_NIST_ITL_PYTHON: python
+          ANSI_NIST_ITL_PYTHON: ${{ runner.temp }}/oracle/bin/python
 
   data:
     name: Data files (DATA-04)
@@ -110,10 +145,53 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: tools/check-data-files.sh
 
+  # A short pass on every pull request; the long one, with more time per target,
+  # runs every week in scheduled.yml. Same setup, same seed corpus.
+  fuzz:
+    name: Fuzz (one minute per target)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # cargo-fuzz sets its own flags; warnings of libFuzzer must not fail it.
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: nightly
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+        with:
+          tool: cargo-fuzz
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: |
+            .
+            fuzz
+      - name: Synthetic seed corpus
+        run: |
+          cargo run --example fuzz_seeds -- fuzz/corpus/parse
+          cargo run --example fuzz_seeds -- fuzz/corpus/exact
+          cargo run --example fuzz_seeds -- fuzz/corpus/parse_tolerant
+      # The prebuilt cargo-fuzz is a musl binary: its default target would be
+      # musl, which the sanitizers do not support.
+      - name: Fuzz the parser for one minute
+        run: cargo fuzz run parse --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
+      - name: Fuzz the exact writing for one minute
+        run: cargo fuzz run exact --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
+      - name: Fuzz the tolerant mode for one minute
+        run: cargo fuzz run parse_tolerant --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts
+
   # The one status to read: green when every needed job passed or was skipped.
   ci:
     if: ${{ !cancelled() }}
-    needs: [changes, core, bench, oracle, data]
+    needs: [changes, core, msrv-test, bench, oracle, data, fuzz]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

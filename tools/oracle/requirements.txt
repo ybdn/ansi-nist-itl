@@ -1,0 +1,6 @@
+# The reference implementation, as installed by the CI and documented in README.md:
+#   uv pip install --require-hashes --only-binary :all: -r tools/oracle/requirements.txt
+# nistitl 0.6 is a pure-Python wheel without dependencies, so there is nothing else to pin.
+# Hash: sha256 of nistitl-0.6-py3-none-any.whl, from https://pypi.org/pypi/nistitl/0.6/json
+nistitl==0.6 \
+    --hash=sha256:9c69850d1bebc0e5ad838da6b6ec348399392ec6518d13abed7061aa0a4229f8
