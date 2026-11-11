@@ -4,8 +4,8 @@
 # classifies the diff; every job is skipped when its files did not change, and
 # `ci` is the one status to require. On a push, a release (workflow_call) or a
 # manual run everything runs.
-#   core        shared workflow: tests, clippy, rustfmt, docs, MSRV 1.85 (cargo check only)
-#   msrv-test   the tests themselves on Rust 1.85
+#   core        shared workflow: tests, clippy, rustfmt, docs, MSRV 1.86 (cargo check only)
+#   msrv-test   the tests themselves on Rust 1.86
 #   oracle      comparison with nistitl 0.6 on CPython 3.12.16 (tools/oracle/README.md)
 #   fuzz        one minute per fuzz target, from a synthetic seed corpus
 # The long fuzzing (about twenty minutes) and the advisories: scheduled.yml.
@@ -67,13 +67,13 @@ jobs:
     if: needs.changes.outputs.rust == 'true'
     uses: ybdn-ei/.github/.github/workflows/rust-ci.yml@main
     with:
-      msrv: "1.85"
+      msrv: "1.86"
       feature-sets: '["", "--all-features"]'
     secrets: inherit
 
   # `core` only runs `cargo check` on the MSRV: this job runs the tests on it.
   msrv-test:
-    name: Tests on the MSRV (1.85)
+    name: Tests on the MSRV (1.86)
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
@@ -82,7 +82,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: "1.85"
+          toolchain: "1.86"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo test --lib --tests
       - run: cargo test --lib --tests --all-features

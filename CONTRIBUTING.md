@@ -41,7 +41,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 
 The CI also runs:
 
-- the tests on the MSRV, Rust 1.85 (`cargo +1.85 test --lib --tests`; the shared workflow
+- the tests on the MSRV, Rust 1.86 (`cargo +1.86 test --lib --tests`; the shared workflow
   only runs `cargo check` on it);
 - the oracle bench against `nistitl` 0.6, on a pinned CPython 3.12.16
   ([`tools/oracle/README.md`](tools/oracle/README.md));

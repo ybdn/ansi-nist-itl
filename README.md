@@ -4,7 +4,7 @@
 [![docs.rs](https://img.shields.io/docsrs/ansi-nist-itl)](https://docs.rs/ansi-nist-itl)
 [![CI](https://github.com/ybdn-ei/ansi-nist-itl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ybdn-ei/ansi-nist-itl/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![MSRV 1.85](https://img.shields.io/badge/MSRV-1.85-orange.svg)](Cargo.toml)
+[![MSRV 1.86](https://img.shields.io/badge/MSRV-1.86-orange.svg)](Cargo.toml)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](src/lib.rs)
 
 **Read, write and validate ANSI/NIST-ITL biometric files in Rust** — the `.nist`, `.eft`,
@@ -173,7 +173,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   See [`tools/oracle/README.md`](https://github.com/ybdn-ei/ansi-nist-itl/blob/develop/tools/oracle/README.md).
 - **Robustness**: three fuzz targets (parsing, exact writing, tolerant mode) run in CI; no
   `unsafe`; property tests.
-- **Portability**: pure Rust, no `unsafe`, no I/O; tested on Linux in CI (macOS and Windows are not tested in CI); Rust 1.85 or later; works on `&[u8]`
+- **Portability**: pure Rust, no `unsafe`, no I/O; tested on Linux in CI (macOS and Windows are not tested in CI); Rust 1.86 or later; works on `&[u8]`
   assumptions.
 - **Data protection**: biometric files are personal data. The repository holds synthetic test
   data only, and a CI job refuses NIST files outside them.
