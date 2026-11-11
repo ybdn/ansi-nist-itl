@@ -11,6 +11,10 @@ All notable changes to this crate are documented here. The format follows
 - `encoding::decode` and `encoding::encode` support UTF-16 and UTF-32 (LIB-18, #85). Reading honours a byte order mark and defaults to big-endian; writing is big-endian without a mark. Malformed input (odd length, unpaired surrogate, invalid scalar value) gives `ErrorKind::Decoding`; a character whose encoded bytes include a separator (`0x1C` to `0x1F`) gives `ErrorKind::Encoding`. In these two encodings byte `0x02` is data, not an `STX` switch sequence. `nistitl` 0.6 has no such decoding, so the default parsing is unchanged.
 - Fuzz target `encoding`, run by the CI and the scheduled workflow.
 
+### Changed
+
+- MSRV raised from Rust 1.85 to 1.86 (`criterion` 0.8, a dev-dependency used only by the benchmarks, requires it).
+
 ## [1.0.2] - 2026-11-10
 
 ### Changed

@@ -2,7 +2,7 @@
 name = "ansi-nist-itl"
 version = "1.0.2"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.86"
 description = "Read, write and validate ANSI/NIST-ITL biometric files (NIST, EBTS, INT-I), byte for byte compatible with nistitl 0.6 (IDEMIA)"
 license = "MIT"
 repository = "https://github.com/ybdn-ei/ansi-nist-itl"
@@ -21,8 +21,7 @@ chrono = { version = "0.4.38", default-features = false, features = ["clock"], o
 serde = { version = "1.0.200", features = ["derive"], optional = true }
 
 [dev-dependencies]
-# 0.7: the last version for Rust 1.85 (QA-07).
-criterion = { version = "0.7", default-features = false, features = ["cargo_bench_support"] }
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
 proptest = { version = "1.5", default-features = false, features = ["std"] }
 serde_json = "1.0"
 

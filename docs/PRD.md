@@ -123,7 +123,7 @@ ansi-nist-itl (public, crates.io)  ◄── dépendance Cargo ──  nist-stud
 | QA-04 | Fuzzing du parseur (`cargo-fuzz`) en CI | M | Livré (3 cibles `cargo-fuzz`, exécution hebdomadaire planifiée : `.github/workflows/scheduled.yml`) |
 | QA-05 | Tests de propriétés (générer → écrire → relire = identité) | S | Livré (`tests/properties.rs`) |
 | QA-06 | CI : `cargo test`, `clippy -D warnings`, `rustfmt`, `cargo doc`, Linux / macOS / Windows | M | Partiel : Linux seulement (workflow partagé `ybdn-ei/.github`, `ubuntu-latest`) ; macOS et Windows non testés en CI |
-| QA-07 | MSRV (version minimale de Rust) déclarée et testée | S | Livré (MSRV 1.85 déclarée et testée en CI) |
+| QA-07 | MSRV (version minimale de Rust) déclarée et testée | S | Livré (MSRV 1.86 déclarée et testée en CI) |
 | QA-08 | Benchmarks (`criterion`) sur des fichiers de taille réaliste | C | Livré (`benches/message.rs`, compilés en CI) |
 
 ### 6.1 Données de test — point critique
