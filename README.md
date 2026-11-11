@@ -154,9 +154,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Limits
 
 - Images are carried as bytes, not decoded (see above for WSQ).
-- Character encodings of field 1.015: ASCII, Latin-1 and UTF-8 only. UTF-16 and UTF-32 are not
-  supported yet (they are planned in 1.x, [#85](https://github.com/ybdn-ei/ansi-nist-itl/issues/85));
-  text holding an `STX` switch sequence is refused.
+- Character encodings of field 1.015: ASCII, Latin-1, UTF-8, UTF-16 and UTF-32 (module
+  `encoding`). UTF-16 and UTF-32 are read with their byte order mark, big-endian without one,
+  and written big-endian without a mark; a character whose bytes include `0x1C` to `0x1F` (the
+  separators, for instance U+1C00 to U+1FFF in UTF-16) is refused when encoding. Text holding an
+  `STX` switch sequence (Annex B.1.8) is refused, except in UTF-16 and UTF-32.
 - XML (NIEM) representation of ANSI/NIST-ITL is not supported; it is considered for a 2.x.
 - Only the FBI EBTS 11.2 and INTERPOL INT-I 5.03 profiles are bundled; national profiles are not
   planned.

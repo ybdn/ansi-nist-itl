@@ -10,7 +10,15 @@
 //! and user-defined). UTF-16 and UTF-32 need the switch sequences of Annex
 //! B.1.8 (`STX` … `ETX`, with Base-64 text), whose exact syntax the
 //! standard gives no example of and that ANSI/NIST-ITL 1-2025 removed: they
-//! are not supported, and text holding an `STX` is refused.
+//! are not supported, and text holding an `STX` is refused (except in UTF-16
+//! and UTF-32, where byte `0x02` is ordinary data).
+//!
+//! UTF-16 and UTF-32 are read from the bytes of the field, with a byte order
+//! mark if there is one and big-endian (RFC 2781, the Unicode default)
+//! otherwise, and written big-endian without a byte order mark. The reference
+//! implementation has no such decoding. As the parser cuts the file at the
+//! bytes `0x1C` to `0x1F` whatever the encoding, a text whose encoding holds one
+//! (U+1C00 to U+1FFF in UTF-16, for instance) is refused by [`encode`].
 //!
 //! ```
 //! use ansi_nist_itl::encoding::{decode, encode, CharacterEncoding};
@@ -126,7 +134,9 @@ impl CharacterEncoding {
         );
         Error::new(
             ErrorKind::UnsupportedEncoding(Some(self.csi())),
-            format!("{what} is not supported: only ASCII, Latin-1 and UTF-8 are decoded"),
+            format!(
+                "{what} is not supported: only ASCII, Latin-1, UTF-8, UTF-16 and UTF-32 are decoded"
+            ),
         )
     }
 }
@@ -161,9 +171,12 @@ fn latin1_bytes(text: &str) -> Result<Vec<u8>> {
 /// of `encoding`.
 ///
 /// Fails with [`ErrorKind::Decoding`] if the bytes are not valid in the
-/// encoding (a byte above `0x7F` in ASCII, malformed UTF-8), and with
-/// [`ErrorKind::UnsupportedEncoding`] for UTF-16, UTF-32, user-defined sets
-/// and `STX` switch sequences.
+/// encoding (a byte above `0x7F` in ASCII, malformed UTF-8, an odd number of
+/// bytes or an unpaired surrogate in UTF-16, a length that is not a multiple
+/// of four or an invalid scalar value in UTF-32), and with
+/// [`ErrorKind::UnsupportedEncoding`] for user-defined sets and `STX` switch
+/// sequences. UTF-16 and UTF-32 honour a byte order mark and default to
+/// big-endian.
 ///
 /// ```
 /// use ansi_nist_itl::encoding::{decode, CharacterEncoding};
@@ -173,10 +186,17 @@ fn latin1_bytes(text: &str) -> Result<Vec<u8>> {
 /// assert_eq!(decode("\u{c3}\u{a9}t\u{c3}\u{a9}", CharacterEncoding::Utf8)?, "été");
 /// assert_eq!(decode("\u{e9}", CharacterEncoding::Utf8).unwrap_err().kind(), &ErrorKind::Decoding);
 /// assert_eq!(decode("\u{e9}", CharacterEncoding::Ascii).unwrap_err().kind(), &ErrorKind::Decoding);
+/// assert_eq!(decode("\0\u{e9}", CharacterEncoding::Utf16)?, "é");
+/// assert_eq!(decode("\u{ff}\u{fe}\u{e9}\0", CharacterEncoding::Utf16)?, "é"); // little-endian BOM
 /// # Ok::<(), ansi_nist_itl::Error>(())
 /// ```
 pub fn decode(text: &str, encoding: CharacterEncoding) -> Result<String> {
-    refuse_switch(text)?;
+    if !matches!(
+        encoding,
+        CharacterEncoding::Utf16 | CharacterEncoding::Utf32
+    ) {
+        refuse_switch(text)?;
+    }
     match encoding {
         CharacterEncoding::Latin1 => latin1_bytes(text).map(|_| text.to_owned()),
         CharacterEncoding::Ascii => {
@@ -194,15 +214,85 @@ pub fn decode(text: &str, encoding: CharacterEncoding) -> Result<String> {
                 format!("invalid UTF-8 at byte {}", e.utf8_error().valid_up_to()),
             )
         }),
-        other => Err(other.unsupported()),
+        CharacterEncoding::Utf16 => decode_utf16(&latin1_bytes(text)?),
+        CharacterEncoding::Utf32 => decode_utf32(&latin1_bytes(text)?),
+        other @ CharacterEncoding::UserDefined(_) => Err(other.unsupported()),
     }
+}
+
+fn decode_utf16(bytes: &[u8]) -> Result<String> {
+    let (bytes, little) = match bytes {
+        [0xFF, 0xFE, rest @ ..] => (rest, true),
+        [0xFE, 0xFF, rest @ ..] => (rest, false),
+        _ => (bytes, false),
+    };
+    if bytes.len() % 2 != 0 {
+        return Err(Error::new(
+            ErrorKind::Decoding,
+            "UTF-16 text has an odd number of bytes",
+        ));
+    }
+    let units = bytes.chunks_exact(2).map(|c| {
+        let pair = [c[0], c[1]];
+        if little {
+            u16::from_le_bytes(pair)
+        } else {
+            u16::from_be_bytes(pair)
+        }
+    });
+    char::decode_utf16(units)
+        .collect::<std::result::Result<String, _>>()
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::Decoding,
+                format!(
+                    "unpaired surrogate U+{:04X} in UTF-16",
+                    e.unpaired_surrogate()
+                ),
+            )
+        })
+}
+
+fn decode_utf32(bytes: &[u8]) -> Result<String> {
+    let (bytes, little) = match bytes {
+        [0xFF, 0xFE, 0, 0, rest @ ..] => (rest, true),
+        [0, 0, 0xFE, 0xFF, rest @ ..] => (rest, false),
+        _ => (bytes, false),
+    };
+    if bytes.len() % 4 != 0 {
+        return Err(Error::new(
+            ErrorKind::Decoding,
+            "the length of UTF-32 text is not a multiple of four bytes",
+        ));
+    }
+    bytes
+        .chunks_exact(4)
+        .map(|c| {
+            let quad = [c[0], c[1], c[2], c[3]];
+            let n = if little {
+                u32::from_le_bytes(quad)
+            } else {
+                u32::from_be_bytes(quad)
+            };
+            char::from_u32(n).ok_or_else(|| {
+                Error::new(
+                    ErrorKind::Decoding,
+                    format!("U+{n:04X} is not a Unicode scalar value (UTF-32)"),
+                )
+            })
+        })
+        .collect()
 }
 
 /// Turns a text into the Latin-1 view of its bytes in `encoding`, ready to
 /// be set in a field and written as the reference implementation writes text.
 ///
+/// UTF-16 and UTF-32 are written big-endian without a byte order mark.
+///
 /// Fails with [`ErrorKind::Encoding`] for a character the encoding cannot
-/// hold, and with [`ErrorKind::UnsupportedEncoding`] as [`decode`].
+/// hold (in UTF-16 and UTF-32, one whose bytes include `0x1C` to `0x1F`, the
+/// separators of the file), and with [`ErrorKind::UnsupportedEncoding`] as
+/// [`decode`].
 ///
 /// ```
 /// use ansi_nist_itl::encoding::{encode, CharacterEncoding};
@@ -211,15 +301,31 @@ pub fn decode(text: &str, encoding: CharacterEncoding) -> Result<String> {
 /// assert_eq!(encode("été", CharacterEncoding::Utf8)?, "\u{c3}\u{a9}t\u{c3}\u{a9}");
 /// assert_eq!(encode("été", CharacterEncoding::Latin1)?, "été");
 /// assert_eq!(encode("€", CharacterEncoding::Latin1).unwrap_err().kind(), &ErrorKind::Encoding);
+/// assert_eq!(encode("é", CharacterEncoding::Utf16)?, "\0\u{e9}");
+/// assert_eq!(encode("é", CharacterEncoding::Utf32)?, "\0\0\0\u{e9}");
 /// # Ok::<(), ansi_nist_itl::Error>(())
 /// ```
 pub fn encode(text: &str, encoding: CharacterEncoding) -> Result<String> {
-    refuse_switch(text)?;
+    if !matches!(
+        encoding,
+        CharacterEncoding::Utf16 | CharacterEncoding::Utf32
+    ) {
+        refuse_switch(text)?;
+    }
     let limit = match encoding {
         CharacterEncoding::Ascii => 0x80,
         CharacterEncoding::Latin1 => 0x100,
         CharacterEncoding::Utf8 => return Ok(text.bytes().map(char::from).collect()),
-        other => return Err(other.unsupported()),
+        CharacterEncoding::Utf16 => {
+            return separator_free(text.encode_utf16().flat_map(u16::to_be_bytes), encoding);
+        }
+        CharacterEncoding::Utf32 => {
+            return separator_free(
+                text.chars().flat_map(|c| u32::from(c).to_be_bytes()),
+                encoding,
+            );
+        }
+        other @ CharacterEncoding::UserDefined(_) => return Err(other.unsupported()),
     };
     if let Some(c) = text.chars().find(|&c| u32::from(c) >= limit) {
         return Err(Error::new(
@@ -232,6 +338,24 @@ pub fn encode(text: &str, encoding: CharacterEncoding) -> Result<String> {
         ));
     }
     Ok(text.to_owned())
+}
+
+/// The Latin-1 view of `bytes`, which the parser would cut at a separator.
+fn separator_free(bytes: impl Iterator<Item = u8>, encoding: CharacterEncoding) -> Result<String> {
+    let mut view = String::new();
+    for b in bytes {
+        if (0x1C..=0x1F).contains(&b) {
+            return Err(Error::new(
+                ErrorKind::Encoding,
+                format!(
+                    "a character of the text has the separator byte 0x{b:02X} in {}",
+                    encoding.name().unwrap_or_default()
+                ),
+            ));
+        }
+        view.push(char::from(b));
+    }
+    Ok(view)
 }
 
 /// Applies `f` to every text of a value.
