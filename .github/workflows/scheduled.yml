@@ -42,6 +42,8 @@ jobs:
         run: cargo fuzz run exact --target x86_64-unknown-linux-gnu -- -max_total_time=300 -max_len=8192
       - name: Fuzz the tolerant mode for five minutes
         run: cargo fuzz run parse_tolerant --target x86_64-unknown-linux-gnu -- -max_total_time=300 -max_len=8192
+      - name: Fuzz the character encodings for five minutes
+        run: cargo fuzz run encoding --target x86_64-unknown-linux-gnu -- -max_total_time=300 -max_len=8192
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:

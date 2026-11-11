@@ -83,7 +83,7 @@ ansi-nist-itl (public, crates.io)  ◄── dépendance Cargo ──  nist-stud
 | LIB-15 | Dictionnaire des champs par type : numéro → mnémonique, nom, format, cardinalité | NEW | S | Livré (feature `dictionary`, ANSI/NIST-ITL 1-2011 Update 2015) |
 | LIB-16 | Validation selon la norme : champs obligatoires, formats, cardinalités, cohérence CNT/IDC | NEW | S | Livré (feature `validation`) |
 | LIB-17 | Profils de validation : EBTS 11.2 (FBI) et INT-I 5.03 (INTERPOL) livrés ; les profils nationaux ne sont pas planifiés (l'énumération `Profile` est fermée : un nouveau profil s'ajoute dans la crate) | NEW | S | Partiel : EBTS 11.2 et INT-I 5.03 (`Message::validate_profile`) ; profils nationaux non planifiés (décision du 2026-11-10) |
-| LIB-18 | Encodages déclarés en 1.015 (DCS) : ASCII, Latin-1, UTF-8 livrés ; UTF-16 et UTF-32 planifiés en 1.x ; les séquences `STX` … `ETX` de l'annexe B.1.8 ne sont pas supportées (texte contenant un `STX` refusé) | NEW | S | Partiel : ASCII, Latin-1, UTF-8 (module `encoding`) ; UTF-16 et UTF-32 en 1.x, issue #85 (décision du 2026-11-10) ; `STX` non supporté |
+| LIB-18 | Encodages déclarés en 1.015 (DCS) : ASCII, Latin-1, UTF-8, UTF-16 et UTF-32 livrés ; les séquences `STX` … `ETX` de l'annexe B.1.8 ne sont pas supportées (texte contenant un `STX` refusé) | NEW | S | Partiel : ASCII, Latin-1, UTF-8, UTF-16 et UTF-32 (module `encoding` ; UTF-16/32 : BOM reconnu, big-endian par défaut et à l'écriture, caractère dont les octets contiennent `0x1C` à `0x1F` refusé à l'encodage ; issue #85) ; `STX` non supporté |
 | LIB-19 | Formats « traditionnels » (versions 0200 à 0500) : lus, réécrits et écrits à l'identique, sans règle de validation par version | NEW | S | Livré (`tests/versions.rs`) |
 | LIB-20 | Accès typé aux métadonnées image communes (résolution, compression, dimensions, position doigt/paume) — **sans décodage** | NEW | M | Livré (module `image`) |
 | LIB-21 | Libellés lisibles des codes (positions FGP, types d'impression IMP, compressions CGA) | NEW | S | Livré (module `codes`) |
@@ -169,4 +169,4 @@ Les fichiers réels (corpus de la v1, `nist-files/`) contiennent des **données 
 5. ~~Titulaire du copyright~~ (décidé : ybdn, à titre personnel) — compte de publication crates.io à créer / lier au GitHub perso.
 6. ~~Crate WSQ séparée et publique ?~~ (décidé : oui, `wsq-codec`, crate distincte ; feature optionnelle `wsq` suivie par l'issue #75, conditionnelle à `wsq-codec` 1.0, voir §4.3)
 7. ~~Langue de la documentation publique~~ (décidé : anglais pour le README, la documentation rustdoc, le CHANGELOG et les commentaires du code ; ce PRD reste en français)
-8. ~~Encodages de 1.015~~ (décidé le 2026-11-10 : ASCII, Latin-1 et UTF-8 livrés ; UTF-16 et UTF-32 planifiés en 1.x, issue #85 ; `STX` non supporté, LIB-18)
+8. ~~Encodages de 1.015~~ (décidé le 2026-11-10 : ASCII, Latin-1, UTF-8, UTF-16 et UTF-32 livrés, issue #85 ; `STX` non supporté, LIB-18)
