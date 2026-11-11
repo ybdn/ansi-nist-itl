@@ -14,6 +14,7 @@ All notable changes to this crate are documented here. The format follows
 ### Changed
 
 - MSRV raised from Rust 1.85 to 1.86 (`criterion` 0.8, a dev-dependency used only by the benchmarks, requires it).
+- CI: manual Windows job `test-windows` (`workflow_dispatch` input `run_windows`, off by default, not part of the `ci` status). Run of 2026-11-11 on `windows-latest`: 1155 tests passed, 0 failed, 3 ignored.
 
 ## [1.0.2] - 2026-11-10
 

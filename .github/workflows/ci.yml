@@ -18,6 +18,11 @@ on:
     branches: [develop, main]
   workflow_call:
   workflow_dispatch:
+    inputs:
+      run_windows:
+        description: "Also run the test suite on the hosted Windows runner"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -189,6 +194,24 @@ jobs:
         with:
           name: fuzz-artifacts
           path: fuzz/artifacts
+
+  # Manual only: the other jobs are Linux. Same test commands as `core` (default features,
+  # then --all-features). Not in `ci`'s needs: it never blocks a pull request.
+  test-windows:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_windows
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - run: cargo test --all-targets
+      - run: cargo test --doc
+      - run: cargo test --all-targets --all-features
+      - run: cargo test --doc --all-features
 
   # The one status to read: green when every needed job passed or was skipped.
   ci:
