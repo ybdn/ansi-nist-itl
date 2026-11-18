@@ -71,3 +71,45 @@ fn nesting_up_to_the_limit_is_kept() {
     assert_eq!(sf.to_bytes().unwrap().len(), 2 * MAX_ITEM_DEPTH + 3);
     too_deep(SubField::new(vec![nested(MAX_ITEM_DEPTH + 1)], "SI").unwrap_err());
 }
+
+/// `rec(t, body)`: a tagged record whose LEN (field 1) is its length.
+fn rec(t: u32, body: &[u8]) -> Vec<u8> {
+    let head = format!("{t}.001:");
+    // The fixed point of `len = head + digits(len) + GS + body`.
+    let mut len = 0;
+    loop {
+        let next = head.len() + len.to_string().len() + 1 + body.len();
+        if next == len {
+            break;
+        }
+        len = next;
+    }
+    [format!("{head}{len}\x1d").as_bytes(), body].concat()
+}
+
+/// A Type-2 record of 40 000 fields used to take seconds, the time growing
+/// with the square of the number of fields: each field was looked up and
+/// checked against all the previous ones. The bound is wide, for slow CI
+/// runners and instrumented builds; the quadratic parsing took minutes in a
+/// debug build.
+#[test]
+fn parsing_is_linear_in_the_number_of_fields() {
+    let t1 = rec(
+        1,
+        b"1.002:0400\x1d1.003:1\x1f1\x1e2\x1f0\x1d1.004:T\x1d1.005:20200101\x1d1.007:000\x1d1.008:000\x1d1.009:X\x1d1.011:00.00\x1d1.012:00.00\x1c",
+    );
+    let mut body = b"2.002:0".to_vec();
+    for tag in 3..40_003 {
+        body.extend(format!("\x1d2.{tag:03}:v").bytes());
+    }
+    body.push(0x1c);
+    let buffer = [t1, rec(2, &body)].concat();
+    let start = std::time::Instant::now();
+    let msg = Message::parse(&buffer).unwrap();
+    let elapsed = start.elapsed();
+    assert_eq!(
+        msg.record(1).unwrap().as_ascii().unwrap().fields().len(),
+        40_002
+    );
+    assert!(elapsed.as_secs() < 20, "{elapsed:?}");
+}

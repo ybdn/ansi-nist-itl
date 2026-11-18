@@ -1,5 +1,6 @@
 //! Tagged records.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -407,7 +408,22 @@ impl AsciiRecord {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn add_field(&mut self, field: impl Into<AnyField>) -> Result<&mut Self> {
-        let mut field = field.into();
+        let field = self.checked_field(field.into())?;
+        for other in self.fields.iter() {
+            if other.tag() == field.tag() {
+                return Err(self.tag_duplicate(&field));
+            }
+            if !field.alias().is_empty() && other.alias() == field.alias() {
+                return Err(self.alias_duplicate(&field));
+            }
+        }
+        self.fields_mut().push(field);
+        Ok(self)
+    }
+
+    /// `field`, with the alias of the table if it has none, if its record
+    /// number is the type of the record.
+    fn checked_field(&self, mut field: AnyField) -> Result<AnyField> {
         if field.alias().is_empty() {
             let table = self.alias_table()?;
             if let Some(alias) = table_tag(field.tag()).and_then(|t| alias::alias_of(table, t)) {
@@ -420,18 +436,72 @@ impl AsciiRecord {
                     .with_position(self.field_position(field.tag())),
             );
         }
-        for other in self.fields.iter() {
-            if other.tag() == field.tag() {
-                return Err(Error::tag_duplicate(field.tag(), self.record_type)
-                    .with_position(self.field_position(field.tag())));
+        Ok(field)
+    }
+
+    fn tag_duplicate(&self, field: &AnyField) -> Error {
+        Error::tag_duplicate(field.tag(), self.record_type)
+            .with_position(self.field_position(field.tag()))
+    }
+
+    fn alias_duplicate(&self, field: &AnyField) -> Error {
+        Error::alias_duplicate(field.alias(), self.record_type)
+            .with_position(self.field_position(field.tag()))
+    }
+
+    /// Rebuilds `index` if fields were added or removed since it was built.
+    fn sync(&self, index: &mut FieldIndex) {
+        if index.len != self.fields.len() {
+            *index = FieldIndex::default();
+            for (i, f) in self.fields.iter().enumerate() {
+                index.insert(f, i);
             }
-            if !field.alias().is_empty() && other.alias() == field.alias() {
-                return Err(Error::alias_duplicate(field.alias(), self.record_type)
-                    .with_position(self.field_position(field.tag())));
-            }
+            index.len = self.fields.len();
         }
+    }
+
+    /// [`AsciiRecord::add_field`] in constant time, the duplicates being
+    /// looked up in `index`: same checks, same errors.
+    pub(crate) fn add_field_indexed(
+        &mut self,
+        field: impl Into<AnyField>,
+        index: &mut FieldIndex,
+    ) -> Result<()> {
+        let field = self.checked_field(field.into())?;
+        self.sync(index);
+        // `add_field` reports the first field, in order, with the same tag
+        // or the same alias; the tag first when one field has both.
+        let tag = index.tags.get(field.tag()).copied();
+        let alias = (!field.alias().is_empty())
+            .then(|| index.aliases.get(field.alias()).copied())
+            .flatten();
+        match (tag, alias) {
+            (Some(t), Some(a)) if a < t => return Err(self.alias_duplicate(&field)),
+            (Some(_), _) => return Err(self.tag_duplicate(&field)),
+            (None, Some(_)) => return Err(self.alias_duplicate(&field)),
+            (None, None) => {}
+        }
+        index.insert(&field, self.fields.len());
+        index.len += 1;
         self.fields_mut().push(field);
-        Ok(self)
+        Ok(())
+    }
+
+    /// [`AsciiRecord::field_mut`] by tag, through `index`.
+    pub(crate) fn field_mut_indexed(
+        &mut self,
+        tag: &PyInt,
+        index: &mut FieldIndex,
+    ) -> Option<&mut AnyField> {
+        self.sync(index);
+        let i = *index.tags.get(tag)?;
+        self.fields_mut().get_mut(i)
+    }
+
+    /// [`AsciiRecord::field`] by tag, through `index`.
+    pub(crate) fn field_indexed(&self, tag: &PyInt, index: &mut FieldIndex) -> Option<&AnyField> {
+        self.sync(index);
+        self.fields.get(*index.tags.get(tag)?)
     }
 
     /// First field whose tag, or whose non-empty alias, is `key`
@@ -1023,10 +1093,75 @@ impl fmt::Display for AsciiRecord {
     }
 }
 
+/// Position of the first field of each tag and of each non-empty alias of
+/// a record, so that the parser adds and finds fields in constant time
+/// instead of scanning the record (quadratic in the number of fields).
+#[derive(Debug, Default)]
+pub(crate) struct FieldIndex {
+    tags: HashMap<PyInt, usize>,
+    aliases: HashMap<String, usize>,
+    /// Number of fields of the record when indexed: any other number means
+    /// fields were appended outside the index, which is then rebuilt.
+    /// shortcut: a field removed or replaced behind the index goes unseen;
+    /// the parser only appends, use a generation counter if that changes.
+    len: usize,
+}
+
+impl FieldIndex {
+    fn insert(&mut self, field: &AnyField, at: usize) {
+        self.tags.entry(field.tag().clone()).or_insert(at);
+        if !field.alias().is_empty() {
+            self.aliases.entry(field.alias().to_owned()).or_insert(at);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::error::{ErrorKind, NistError};
+
+    /// `add_field_indexed` accepts and refuses the same fields as
+    /// `add_field`, with the same errors, whatever the order of the
+    /// duplicates; the index follows changes made outside it.
+    #[test]
+    fn indexed_add_matches_add_field() {
+        use crate::field::Field;
+        let candidates = || {
+            vec![
+                Field::new(2, 3, "a").unwrap(),
+                Field::with(2, 4, "b", "FSI", "%d.%03d:", "X").unwrap(),
+                Field::new(2, 3, "again").unwrap(),
+                Field::with(2, 5, "c", "FSI", "%d.%03d:", "X").unwrap(),
+                Field::with(2, 3, "d", "FSI", "%d.%03d:", "X").unwrap(),
+                Field::with(2, 6, "e", "FSI", "%d.%03d:", "Y").unwrap(),
+                Field::with(2, 4, "f", "FSI", "%d.%03d:", "Y").unwrap(),
+                Field::new(9, 7, "g").unwrap(),
+                Field::new(2, 2, "idc").unwrap(),
+            ]
+        };
+        let mut plain = AsciiRecord::new(2).unwrap();
+        let mut indexed = AsciiRecord::new(2).unwrap();
+        let mut index = FieldIndex::default();
+        for (a, b) in candidates().into_iter().zip(candidates()) {
+            let expected = plain.add_field(a).map(|_| ()).map_err(|e| e.to_string());
+            let got = indexed
+                .add_field_indexed(b, &mut index)
+                .map_err(|e| e.to_string());
+            assert_eq!(got, expected);
+        }
+        assert_eq!(indexed, plain);
+        let tag = PyInt::from(6);
+        assert_eq!(indexed.field_indexed(&tag, &mut index), plain.field(6));
+        // Fields appended behind the index.
+        indexed.add_field(Field::new(2, 8, "h").unwrap()).unwrap();
+        let tag = PyInt::from(8);
+        assert!(indexed.field_mut_indexed(&tag, &mut index).is_some());
+        let err = indexed
+            .add_field_indexed(Field::new(2, 8, "again").unwrap(), &mut index)
+            .unwrap_err();
+        assert_eq!(*err.kind(), ErrorKind::Nist(NistError::BadTagDuplicate));
+    }
 
     fn defaults() -> Defaults {
         Defaults {

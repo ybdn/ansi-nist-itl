@@ -31,6 +31,7 @@ All notable changes to this crate are documented here. The format follows
 - 10.011 (CGA, Type-10) is `AN`, not `A`: its values come from Table 19, which holds `JP2` and `JP2L` (notes 150 and 151 of the Type-10 table). JPEG 2000 face images were reported invalid.
 - A tag format with a huge width (`"%d.%099999999999d:"`), given to `Field::with`, `BinaryField::with` or a deserialized field, was accepted and then aborted the process or panicked (capacity overflow) when the field was written. The width of a conversion is now at most 1024; a larger one is rejected as an unsupported tag format (`ErrorKind::BadFormat`).
 - Items nested about 10 000 lists deep, given to `SubField::new`, `SubField::set_value`, `SubField::add_values`, `Field::new`, `Field::with`, `Field::set_value`, `AsciiRecord::set`, `AsciiRecord::set_encoded`, `Message::set_tot` or a deserializer without a depth limit, overflowed the stack (recursive `repr`, writing and `Drop`). A value nested deeper than `MAX_ITEM_DEPTH` is now refused with `BAD_SUBFIELD_VALUE`, and taken apart without recursion.
+- Reading a tagged record took a time quadratic in its number of fields: each field was looked up and checked for duplicates against all the previous ones, so a 789 KB Type-2 of 80 000 fields took about 30 s. The parser now indexes the fields of the record by tag and alias: the same file reads in about 70 ms (release build, Apple silicon), with the same messages, errors and diagnostics. Benchmark `fields` in `benches/message.rs`.
 
 ### Removed
 
