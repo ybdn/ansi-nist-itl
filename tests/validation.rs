@@ -314,3 +314,112 @@ fn content() {
     );
     let _ = Value::from(0);
 }
+
+/// The findings on field `t.tag` of a record of type `t` holding `value`.
+fn on_field(t: u32, tag: u32, value: Vec<Vec<&str>>) -> Vec<String> {
+    let mut msg = conformant();
+    let mut r = AsciiRecord::new(t).unwrap();
+    r.set("IDC", 9).unwrap();
+    r.add_field(Field::new(t, tag, value).unwrap()).unwrap();
+    msg.push(r).unwrap();
+    let prefix = format!("{t}.{tag:03}");
+    read(msg)
+        .validate()
+        .findings
+        .iter()
+        .map(ToString::to_string)
+        .filter(|f| f.starts_with(&prefix))
+        .collect()
+}
+
+/// Section 7.7.12.2: after NOP, HPO and VPO repeat as pairs, NOP times
+/// (14.025 ASEG, Table 76; 10.033 FEC; 20.016 SEG without points).
+#[test]
+fn points_repeat_as_pairs() {
+    let three = vec!["2", "3", "10", "10", "20", "10", "20", "20"];
+    assert_eq!(on_field(14, 25, vec![three]), Vec::<String>::new());
+    let fec = vec!["LEFTEYEBROW", "3", "1", "2", "3", "4", "5", "6"];
+    assert_eq!(on_field(10, 33, vec![fec]), Vec::<String>::new());
+    assert_eq!(
+        on_field(20, 16, vec![vec!["1", "0", ""]]),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        on_field(
+            14,
+            25,
+            vec![vec!["2", "4", "10", "10", "20", "10", "20", "20"]]
+        ),
+        ["14.025 subfield 1: NOP is 4, 3 points follow"]
+    );
+    assert_eq!(
+        on_field(14, 25, vec![vec!["2", "3", "10", "10", "20", "10", "20"]]),
+        [
+            "14.025 subfield 1: 5 items after NOP, not whole HPO VPO pairs",
+            "14.025 subfield 1: 2 points, at least 3 expected",
+            "14.025 subfield 1: NOP is 3, 2 points follow",
+        ]
+    );
+    // The format of each coordinate still applies, at its own position.
+    assert_eq!(
+        on_field(
+            14,
+            25,
+            vec![vec!["2", "3", "10", "10", "20", "10", "20", "X"]]
+        ),
+        ["14.025 subfield 1 item 8: character 'X' is not of type N"]
+    );
+}
+
+/// Section 7.7.12.1 and its note 71: an EFS path is one item
+/// `x1,y1-x2,y2-…`, a closed path of at least 3 vertices (9.300 ROI).
+#[test]
+fn efs_path_in_one_item() {
+    let roi = |rop| vec![vec!["983", "983", "75", "100", rop]];
+    assert_eq!(on_field(9, 300, roi("0,0-0,1-0,12")), Vec::<String>::new());
+    assert_eq!(
+        on_field(9, 300, roi("0,0-0,1")),
+        ["9.300 subfield 1 item 5: 2 vertices, at least 3 expected"]
+    );
+    assert_eq!(
+        on_field(9, 300, roi("0,0-0,1-7")),
+        ["9.300 subfield 1 item 5: vertex \"7\" is not x,y"]
+    );
+    assert_eq!(
+        on_field(9, 300, roi("0,0-0,1-0,123456")),
+        ["9.300 subfield 1 item 5: 6 characters, at most 5 expected"]
+    );
+}
+
+/// Section 7.7.13: a list is one item, its values separated by `|`
+/// (11.035 PPY: SIL, up to 600000 values).
+#[test]
+fn lists_in_one_item() {
+    assert_eq!(
+        on_field(11, 35, vec![vec!["1|2|3", "1"]]),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        on_field(11, 35, vec![vec!["1|X", "1"]]),
+        ["11.035 subfield 1 item 1: character 'X' is not of type NS"]
+    );
+}
+
+/// 18.018: "user-defined information items (there may be multiple items)".
+#[test]
+fn user_defined_items_are_free() {
+    let udp = vec![vec!["", ""], vec!["", ""]];
+    assert_eq!(on_field(18, 18, udp), Vec::<String>::new());
+}
+
+/// 10.011: a value of Table 19 except WSQ20 (note 151), so `JP2` and `JP2L`.
+#[test]
+fn face_compression_jpeg_2000() {
+    for cga in ["JP2", "JP2L", "JPEGB"] {
+        assert_eq!(
+            on_field(10, 11, vec![vec![cga]]),
+            Vec::<String>::new(),
+            "{cga}"
+        );
+    }
+}

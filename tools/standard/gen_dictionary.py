@@ -141,6 +141,9 @@ TYPE_FIXES = {
     "18.014": "Gmt",
     # 8.23.6: "The date and time shall appear as GMT format".
     "98.006": "Gmt",
+    # 10.011: the table gives A (note 150), but its value comes from Table 19
+    # except WSQ20 (note 151), which holds JP2 and JP2L; earlier versions had AN.
+    "10.011": "Alphanumeric",
 }
 
 
