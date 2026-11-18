@@ -6,45 +6,111 @@ All notable changes to this crate are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-18
+
+This release states conformance against the standard instead of comparing the crate with
+another implementation, fixes the validation of repeated items and of 10.011, and makes the
+writing refuse what the reading would not read back as written. Some calls that succeeded in
+1.0.2 and wrote a file that the reading refused or read otherwise now return an error: see
+"Changed". Reading files that 1.0.2 read is unchanged.
+
 ### Added
 
-- `encoding::decode` and `encoding::encode` support UTF-16 and UTF-32 (LIB-18, #85). Reading honours a byte order mark and defaults to big-endian; writing is big-endian without a mark. Malformed input (odd length, unpaired surrogate, invalid scalar value) gives `ErrorKind::Decoding`; a character whose encoded bytes include a separator (`0x1C` to `0x1F`) gives `ErrorKind::Encoding`. In these two encodings byte `0x02` is data, not an `STX` switch sequence. The default parsing is unchanged.
-- Fuzz target `encoding`, run by the CI and the scheduled workflow.
-- `docs/CONFORMANCE.md`: conformance statement (versions, record types, validation levels, encodings, profiles, known deviations) with results on the public NIST BioCTS and NBIS sample files. `tests/conformance.rs` checks every record type and reports on a corpus named by `ANSI_NIST_ITL_CORPUS`.
-- Fuzz target `serde`: a message deserialized from any JSON, then written, summarized and validated; run by the CI and the scheduled workflow from the seeds of `fuzz/seeds/serde`.
-- `MAX_ITEM_DEPTH` (128): the deepest nesting of `Item::List` that a subfield, a field or a record accepts.
-- Lint policy in `src/lib.rs`: `unwrap`, `expect`, `panic!`, `unreachable!`, `todo!`, `unimplemented!` and unchecked indexing or slicing are denied outside the tests.
-- `docs/GUIDE.md`, a user guide by task (reading, walking records, writing, exact rewrite, tolerant mode, errors, encodings, validation, dictionary, `serde`, bounds of the API). Its examples are run by `tests/guide.rs`, which fails if an example of the guide is missing from it.
-- `docs/ARCHITECTURE.md`, for contributors: modules, the path from bytes to model and back, invariants and how they are checked, tests, fuzzing, CI, how to extend the dictionary or add a profile, how a release is published.
+- `docs/CONFORMANCE.md`: conformance statement for ANSI/NIST-ITL 1-2011 Update 2015 (versions,
+  record types, validation levels, encodings, profiles, known limits), with results on the
+  public NIST BioCTS and NBIS sample files. `tests/conformance.rs` checks every record type and
+  reports on a corpus named by `ANSI_NIST_ITL_CORPUS`.
+- `docs/GUIDE.md`, a user guide by task, whose examples are run by `tests/guide.rs`; and
+  `docs/ARCHITECTURE.md`, for contributors (modules, invariants, tests, CI, releases).
+- `encoding::decode` and `encoding::encode` support UTF-16 and UTF-32 (#85): a byte order mark
+  is honoured, big-endian otherwise; writing is big-endian without a mark. Malformed input
+  gives `ErrorKind::Decoding`. In these two encodings byte `0x02` is data, not an `STX` switch
+  sequence. The default parsing is unchanged.
+- `ErrorKind::DataLabel`: the label of the data field (`999:`) written outside it, or a text
+  field at its tag.
+- `MAX_ITEM_DEPTH` (128): the deepest nesting of `Item::List` that a subfield, a field or a
+  record accepts.
+- Fuzz targets `encoding` and `serde`, run by the CI and the weekly workflow.
+- Lint policy in `src/lib.rs`: `unwrap`, `expect`, `panic!`, `unreachable!`, `todo!`,
+  `unimplemented!` and unchecked indexing or slicing are denied outside the tests.
 
 ### Changed
 
-- Feature `local-date`: today's date comes from `jiff` instead of `chrono`, which is unmaintained (RUSTSEC-2026-0543, #99): the date in the system time zone, UTC when it cannot be found. One difference: an invalid `TZ` (for instance `TZ=Invalid/Zone`) now gives the UTC date, where `chrono` used the zone of `/etc/localtime`. Android reads its own time zone database (`jiff` feature `tzdb-concatenated`). The exception is removed from `deny.toml`.
-- MSRV raised from Rust 1.85 to 1.86 (`criterion` 0.8, a dev-dependency used only by the benchmarks, requires it).
-- CI: manual Windows job `test-windows` (`workflow_dispatch` input `run_windows`, off by default, not part of the `ci` status). Run of 2026-11-11 on `windows-latest`: 1155 tests passed, 0 failed, 3 ignored.
-- CI: new jobs, all part of the `ci` status: `deny` (`cargo-deny`: advisories, licences and sources, `deny.toml`), `semver` (`cargo-semver-checks` against the latest release on crates.io), `test-macos` (the test suite on `macos-latest`) and `coverage` (`cargo-llvm-cov`, line coverage in the job summary).
-- Release workflow: a version already on crates.io is not published again and an existing GitHub release is kept, so a missing tag can be pushed afterwards.
-- Repository links point to `ybdn/ansi-nist-itl` (`Cargo.toml`, README, `SECURITY.md`, issue templates) instead of the former `ybdn-ei/ansi-nist-itl`, which only redirected.
-- Community: `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1); the issue templates declare `title` and `assignees`.
-- README rewritten: scope and limits as stated in `docs/CONFORMANCE.md` (§1 to §5); the no-panic guarantee states its bounds (`MAX_ITEM_DEPTH`, tag format width) and that it is checked by fuzzing and lints, not formally proven; macOS is tested in CI; links to the guide and the architecture document.
-- `docs/PRD.md` translated into English, with its statuses updated for `develop` (fuzz targets, CI on macOS, UTF-16 and UTF-32, LIB-10 and QA-03 partial).
-- `CONTRIBUTING.md`: setup, documentation rules, fuzzing and how to report a crash.
-- CI: the `data` job (NIST files outside `tests/data/ALLOWLIST`) runs on every pull request; before, it ran only when `data/**` or its script changed, so a pull request adding a NIST file elsewhere skipped it. A change to `docs/GUIDE.md` runs the Rust jobs.
-- The package includes `docs/GUIDE.md`, which `tests/guide.rs` reads.
+- **Now refused**, where 1.0.2 succeeded and wrote a file that the reading refused or read
+  otherwise:
+  - when a field is built (`ErrorKind::BadFormat`): a negative field number
+    (`Field::new(2, -5, …)`, `AsciiRecord::set("_-7", …)`), and a tag format whose label the
+    reading does not read back as `record.tag:` (a separator, `%d-%03d:`, a width padded with
+    spaces), through `Field::with`, `BinaryField::with` or deserialization;
+  - when a value is set: a separator (`U+001C` to `U+001F`) in `encode` and `set_encoded`, in
+    ASCII, Latin-1 and UTF-8 as already in UTF-16 and UTF-32 (`ErrorKind::Encoding`);
+  - when written (`to_bytes`, and `to_bytes_exact` for a record built or changed): a separator
+    in a text value or in a binary field other than the data field (`ErrorKind::Encoding`, with
+    the position of the field), the data label `999:` outside the data field of a record type
+    with data, or a text field at its tag (`ErrorKind::DataLabel`), and a binary record of a
+    type other than 3 to 8 (`ErrorKind::TypeMismatch`).
 
-### Fixed
-
-- What the reading would cut or misread was written without error. Both writings (`to_bytes`, and `to_bytes_exact` for every record built or changed) now refuse a separator (FS, GS, RS, US) in a text value or in a binary field other than the data field (`ErrorKind::Encoding`, with the position of the field; an IDC is named, not the CNT that copies it), the data label `999:` outside the data field of a record type with data and a text field at the tag of the data field (new `ErrorKind::DataLabel`), and a binary record of a type other than 3 to 8 (`TypeMismatch`). The data field is written last, so a field added after the reading is no longer taken into the data. A tag format is checked when the field is built (`BadFormat`). `encoding::encode` and `set_encoded` refuse a separator in ASCII, Latin-1 and UTF-8, as in UTF-16 and UTF-32, with the message of the writing. `to_bytes_exact` errors carry the index of the record. Bytes read are still written back as read. Within the domain of the property tests, a message is refused or read back as written; `docs/CONFORMANCE.md` §5, item 11, lists what lies outside it.
-- **Now refused, where 1.0.2 succeeded and wrote a file that the reading refused or read otherwise:** a negative field number (`Field::new(2, -5, …)`, `AsciiRecord::set("_-7", …)`) and a tag format whose label the reading does not read back (`Field::with`, `BinaryField::with`), both when the field is built; a separator in `encode` and `set_encoded` (ASCII, Latin-1, UTF-8), when the value is set; a separator in a value, in `Field::to_bytes`, `SubField::to_bytes` and the writing of a record; `999:` outside the data field, a text field at the data tag, and a binary record of a tagged type, when the message is written. Consequence: a JSON exported by 1.0.2 that holds such a field or format no longer deserializes (a tag format), or no longer writes (a value).
-- Validation of repeated items (#97). HPO and VPO now repeat as pairs after NOP, and NOP is either absent with them or gives their number (section 7.7.12.2); a Type-9 EFS path is one item `x1,y1-x2,y2-…`, each vertex two non-negative integers, at least 3 vertices for the closed paths and 2 for 9.373 RPS (section 7.7.12.1); a list of Types 10 to 12 is one item `a|b|c` (section 7.7.13); user-defined items (18.018) may be any number, an empty one being a warning, as in the conformant BioCTS samples of NIST. Before, the items were matched one to one with their definitions, which reported valid point lists, paths and lists as errors.
-- 10.011 (CGA, Type-10) is `AN`, not `A`: its values come from Table 19, which holds `JP2` and `JP2L` (notes 150 and 151 of the Type-10 table). JPEG 2000 face images were reported invalid.
-- A tag format with a huge width (`"%d.%099999999999d:"`), given to `Field::with`, `BinaryField::with` or a deserialized field, was accepted and then aborted the process or panicked (capacity overflow) when the field was written. The width of a conversion is now at most 1024; a larger one is rejected as an unsupported tag format (`ErrorKind::BadFormat`).
-- Items nested about 10 000 lists deep, given to `SubField::new`, `SubField::set_value`, `SubField::add_values`, `Field::new`, `Field::with`, `Field::set_value`, `AsciiRecord::set`, `AsciiRecord::set_encoded`, `Message::set_tot` or a deserializer without a depth limit, overflowed the stack (recursive `repr`, writing and `Drop`). A value nested deeper than `MAX_ITEM_DEPTH` is now refused with `BAD_SUBFIELD_VALUE`, and taken apart without recursion.
-- Reading, the exact rewrite and deserialization took a time quadratic in the number of fields or records for these inputs; they are now linear (release build, Apple silicon, before → after): a tagged record of 40 000 fields, 5.2 s → 37 ms (strict and tolerant); 20 000 alternating Type-2 and Type-1 records, each Type-1 adding a field to the first, 1.3 s → 106 ms; a Type-1 of 40 000 fields with its CNT last, then 40 000 binary records, 7.9 s → 68 ms; `to_bytes_exact` of a changed record of 40 000 fields, 3.1 s → 11 ms; deserializing a record of 40 000 fields with `serde`, 1.7 s → 14 ms. The parser indexes the fields of each record and of the Type-1 by tag and alias, with the same messages, errors and diagnostics. Building a record field by field through `AsciiRecord::add_field` or `set` stays quadratic (documented). Benchmark `fields` in `benches/message.rs`.
+  A JSON exported by 1.0.2 that holds such a tag format no longer deserializes, and one that
+  holds such a value no longer writes. Bytes read are still written back as read by
+  `to_bytes_exact`.
+- The data field of a record is written last, by `to_bytes` and by `to_bytes_exact`: a field
+  added after the reading is written before it. A record read keeps its order and its bytes.
+- Feature `local-date`: today's date comes from `jiff` instead of `chrono`, which is
+  unmaintained (RUSTSEC-2026-0543, #99): the date in the system time zone, UTC when it cannot
+  be found. One difference: an invalid `TZ` (such as `TZ=Invalid/Zone`) now gives the UTC
+  date, where `chrono` used the zone of `/etc/localtime`.
+- MSRV raised from Rust 1.85 to 1.86 (`criterion` 0.8, a dev-dependency of the benchmarks,
+  requires it).
+- Branches: `prod` receives releases, promoted from `develop` through `preprod`; `main` is gone.
+  `release.yml` publishes from a tag `v*` on `prod`, does not publish a version already on
+  crates.io again, and keeps an existing GitHub release.
+- CI: new jobs in the `ci` status: `deny` (`cargo-deny`: advisories, licences, sources),
+  `semver` (`cargo-semver-checks` against the latest release), `test-macos` and `coverage`; the
+  `data` job runs on every pull request; a manual Windows job `test-windows` (run of 2026-11-11
+  on `windows-latest`: 1155 tests passed, 0 failed, 3 ignored; it predates the later changes of
+  this release).
+- Repository links point to `ybdn/ansi-nist-itl` instead of `ybdn-ei/ansi-nist-itl`, which only
+  redirected. README rewritten (scope and limits as in `docs/CONFORMANCE.md`; the no-panic
+  guarantee states its bounds); `docs/PRD.md` in English with updated statuses;
+  `CONTRIBUTING.md` (setup, documentation rules, fuzzing, reporting a crash);
+  `CODE_OF_CONDUCT.md`; issue templates. The package includes `docs/GUIDE.md`.
 
 ### Removed
 
-- Every reference to the third-party Python library that served as a comparison oracle: the comparison bench (`tests/oracle.rs`, `tools/oracle/`, `examples/oracle_dump.rs`, CI job `oracle`), the speed comparison (`docs/SPEED.md`, `tools/bench/`), the alias generators that read it, the tests ported from its documentation, and its mention in the README, the package description and the documentation. Conformance is now stated against the standard (`docs/CONFORMANCE.md`). Behaviour and public API are unchanged. `tests/reference_edge_cases.rs` becomes `tests/edge_cases.rs`; the CPython vector generators move to `tools/python/`.
+- Every reference to the third-party Python library that served as a comparison oracle: its
+  comparison bench (`tests/oracle.rs`, `tools/oracle/`, `examples/oracle_dump.rs`, CI job
+  `oracle`), the speed comparison (`docs/SPEED.md`, `tools/bench/`), the alias generators that
+  read it, the tests ported from its documentation, and its mention in the README, the package
+  description and the documentation. `tests/reference_edge_cases.rs` becomes
+  `tests/edge_cases.rs`; the CPython vector generators move to `tools/python/`.
+
+### Fixed
+
+- Validation of repeated items (#97), after sections 7.7.12 and 7.7.13 of the standard: HPO and
+  VPO repeat as pairs after NOP, and NOP is absent with them or gives their number; a Type-9 EFS
+  path is one item `x1,y1-x2,y2-…` of non-negative integers, at least 3 vertices for the closed
+  paths and 2 for 9.373 RPS; a list of Types 10 to 12 is one item `a|b|c`; user-defined items
+  (18.018) may be any number, an empty one being a warning, as in conformant NIST samples.
+  Valid point lists, paths and lists were reported as errors.
+- 10.011 (CGA, Type-10) is `AN`, not `A`: its values come from Table 19, which holds `JP2` and
+  `JP2L`. JPEG 2000 face images were reported invalid.
+- Writing produced files that the reading refused or read otherwise (see "Changed"); within
+  the domain of the property tests, a message is now refused or read back as written, and
+  `docs/CONFORMANCE.md` §5, item 11, lists what lies outside it. An IDC holding a separator is
+  named in the error, not the CNT that copies it; `to_bytes_exact` errors carry the index of
+  the record.
+- A tag format with a huge width (`"%d.%099999999999d:"`) was accepted and then aborted the
+  process or panicked when the field was written; a width is now at most 1024
+  (`ErrorKind::BadFormat`).
+- Items nested about 10 000 lists deep overflowed the stack (recursive `repr`, writing and
+  `Drop`); a value nested deeper than `MAX_ITEM_DEPTH` is refused with `BAD_SUBFIELD_VALUE`, and
+  taken apart without recursion.
+- Reading, the exact rewrite and deserialization took a time quadratic in the number of fields
+  or records; they are now linear (release build, Apple silicon, before → after): a tagged
+  record of 40 000 fields, 5.2 s → 37 ms; `to_bytes_exact` of a changed record of 40 000
+  fields, 3.1 s → 11 ms; deserializing a record of 40 000 fields, 1.7 s → 14 ms. Building a
+  record field by field through `AsciiRecord::add_field` or `set` stays quadratic
+  (documented).
 
 ## [1.0.2] - 2026-11-10
 
@@ -170,7 +236,8 @@ First release: parity with `nistitl` 0.6.
 - Oracle bench against `nistitl` 0.6, fuzz targets, property tests, guard against committing
   real NIST files.
 
-[Unreleased]: https://github.com/ybdn/ansi-nist-itl/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/ybdn/ansi-nist-itl/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/ybdn/ansi-nist-itl/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/ybdn/ansi-nist-itl/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ybdn/ansi-nist-itl/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ybdn/ansi-nist-itl/compare/v0.2.0...v1.0.0

@@ -32,14 +32,14 @@ read, inspect, convert, write or check these files from Rust.
 
 ## Documentation
 
-- [User guide](https://github.com/ybdn/ansi-nist-itl/blob/main/docs/GUIDE.md): one section
+- [User guide](https://github.com/ybdn/ansi-nist-itl/blob/prod/docs/GUIDE.md): one section
   per task, with examples run by the test suite.
 - [API documentation](https://docs.rs/ansi-nist-itl) on docs.rs.
-- [Conformance statement](https://github.com/ybdn/ansi-nist-itl/blob/main/docs/CONFORMANCE.md):
+- [Conformance statement](https://github.com/ybdn/ansi-nist-itl/blob/prod/docs/CONFORMANCE.md):
   what is read, written and validated, known deviations, and results on public NIST sample files.
-- [Architecture](https://github.com/ybdn/ansi-nist-itl/blob/main/docs/ARCHITECTURE.md): modules,
+- [Architecture](https://github.com/ybdn/ansi-nist-itl/blob/prod/docs/ARCHITECTURE.md): modules,
   invariants, tests, fuzzing, CI and releases, for contributors.
-- [Requirements](https://github.com/ybdn/ansi-nist-itl/blob/main/docs/PRD.md) and their status.
+- [Requirements](https://github.com/ybdn/ansi-nist-itl/blob/prod/docs/PRD.md) and their status.
 - [Security policy](SECURITY.md), [contributing](CONTRIBUTING.md), [changelog](CHANGELOG.md).
 
 ## Quick start
@@ -147,7 +147,7 @@ cargo run --example inspect --features validation -- transaction.eft ebts
   tables.
 - The validation does not check the dependent conditions of the tables, value ranges, code
   lists, the content of user-defined fields, nor the header values of binary records
-  ([conformance statement](https://github.com/ybdn/ansi-nist-itl/blob/main/docs/CONFORMANCE.md),
+  ([conformance statement](https://github.com/ybdn/ansi-nist-itl/blob/prod/docs/CONFORMANCE.md),
   §2 and §5).
 - Only the FBI EBTS 11.2 and INTERPOL INT-I 5.03 profiles are bundled; national profiles are not
   planned.
