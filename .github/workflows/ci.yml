@@ -271,10 +271,11 @@ jobs:
       - run: cargo llvm-cov --all-features --lib --tests --no-report
       - name: Summary
         run: |
+          cargo llvm-cov report --summary-only | tee coverage.txt
           {
             echo '## Line coverage (all features, library and tests)'
             echo '```'
-            cargo llvm-cov report --summary-only
+            cat coverage.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
