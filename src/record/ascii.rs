@@ -846,7 +846,8 @@ impl AsciiRecord {
     /// What the reading would cut or misread is refused: a separator in a
     /// text value or in a binary field other than the data field
     /// (`Encoding`), and, in a record type with data, the data label `999:`
-    /// in another field (`DataLabel`). The data field is written last.
+    /// in another field or a text field at the data tag (`DataLabel`). The
+    /// data field is written last.
     ///
     /// ```
     /// use ansi_nist_itl::{AsciiRecord, Value};

@@ -249,3 +249,63 @@ fn deserialization_is_checked() {
     let err = serde_json::from_value::<Field>(field).unwrap_err();
     assert!(err.to_string().contains("format"), "{err}");
 }
+
+/// A binary record of a tagged type would be read as a tagged one: both
+/// writings refuse it.
+#[test]
+fn binary_record_of_a_tagged_type() {
+    for t in [2, 10] {
+        let mut b = ansi_nist_itl::BinaryRecord::new(t);
+        b.set_value(b"zz".to_vec());
+        let mut m = Message::new();
+        m.push(b).unwrap();
+        assert_eq!(
+            m.to_bytes_exact().unwrap_err().kind(),
+            &ErrorKind::TypeMismatch
+        );
+        assert_eq!(m.to_bytes().unwrap_err().kind(), &ErrorKind::TypeMismatch);
+    }
+}
+
+/// A record built, never read, written exactly: its fields are checked.
+#[test]
+fn exact_writing_checks_a_new_record() {
+    let mut r = AsciiRecord::new(14).unwrap();
+    r.set("IDC", 1).unwrap();
+    r.add_field(Field::new(14, 20, "x999:").unwrap()).unwrap();
+    let m = message_with(r);
+    let err = m.to_bytes_exact().unwrap_err();
+    assert_eq!(err.kind(), &ErrorKind::DataLabel);
+    assert_eq!(err.position().record_index, Some(1));
+}
+
+/// The first field of a record takes its length: its label is checked too.
+#[test]
+fn first_field_label() {
+    let mut r = AsciiRecord::with(14, false, true).unwrap();
+    r.add_field(Field::new(14, 1999, "").unwrap()).unwrap();
+    r.add_field(Field::new(14, 2, 1).unwrap()).unwrap();
+    assert_eq!(
+        refused(message_with(r), ErrorKind::DataLabel),
+        "1 14.1999: 999: cannot be written outside the data field: it would be read as its label"
+    );
+}
+
+/// A text field at the tag of the data field would be read as the data, and
+/// take in the fields after it.
+#[test]
+fn text_field_at_the_data_tag() {
+    let mut r = AsciiRecord::new(14).unwrap();
+    r.set("IDC", 1).unwrap();
+    r.add_field(Field::new(14, 999, "t").unwrap()).unwrap();
+    r.add_field(Field::new(14, 1000, "z").unwrap()).unwrap();
+    let m = message_with(r);
+    assert_eq!(
+        m.to_bytes_exact().unwrap_err().kind(),
+        &ErrorKind::DataLabel
+    );
+    assert_eq!(
+        refused(m, ErrorKind::DataLabel),
+        "1 14.999: field 999 holds the data of its record: it must be binary"
+    );
+}

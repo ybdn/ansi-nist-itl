@@ -3,7 +3,7 @@
 
 use std::borrow::Cow;
 
-use super::{Message, at_record, check_idcs, rebuild_cnt};
+use super::{Message, at_record, check_binary_type, check_idcs, rebuild_cnt};
 use crate::error::Result;
 use crate::record::Record;
 use crate::value::Value;
@@ -78,6 +78,7 @@ impl Message {
             first
         };
         let record_bytes = |i: usize, r: &Record| -> Result<Vec<u8>> {
+            check_binary_type(r).map_err(at_record(i))?;
             match (&rebuilt, i) {
                 (Some(first), 0) => first.exact_bytes(true),
                 _ => r.exact_bytes(false),

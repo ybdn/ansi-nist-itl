@@ -28,9 +28,10 @@ pub(crate) fn data_label(record: u32) -> Option<(u32, Vec<u8>)> {
 
 /// The checks of a field that depend on its record, on the `bytes` it is
 /// written with, given the [`data_label`] of the record. Only the data field
-/// may hold any byte. Another binary field may not hold a separator, which
-/// the reading would cut it at; no field but the data field may hold the
-/// data label, which the reading would take for the start of the data.
+/// may hold any byte, and it must be binary. Another binary field may not
+/// hold a separator, which the reading would cut it at; no field but the
+/// data field may hold the data label, which the reading would take for the
+/// start of the data.
 pub(crate) fn check_in_record(
     field: &AnyField,
     bytes: &[u8],
@@ -38,7 +39,17 @@ pub(crate) fn check_in_record(
 ) -> Result<()> {
     let is_data = data.is_some_and(|(tag, _)| field.tag().to_i64() == Some(i64::from(*tag)));
     if is_data {
-        return Ok(());
+        // The reading reads this field as binary data.
+        return match field {
+            AnyField::Binary(_) => Ok(()),
+            AnyField::Text(_) => Err(Error::new(
+                ErrorKind::DataLabel,
+                format!(
+                    "field {} holds the data of its record: it must be binary",
+                    field.tag()
+                ),
+            )),
+        };
     }
     if let AnyField::Binary(_) = field {
         no_separator(bytes)?;
@@ -92,6 +103,11 @@ fn tag_format(format: &str, record: u32, tag: &PyInt) -> Result<PrintfTemplate> 
     let position = || field_position(record, tag);
     let template =
         PrintfTemplate::parse(format).map_err(|e| Error::from(e).with_position(position()))?;
+    // The default format of a tag that is not negative always reads back:
+    // the parser builds every field with it, and does not pay the check.
+    if format == DEFAULT_FORMAT && !tag.is_negative() {
+        return Ok(template);
+    }
     let label = template.render(&PyInt::from(record), tag);
     if !readable_label(&label, record, tag) {
         let message = format!(

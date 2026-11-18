@@ -581,20 +581,7 @@ impl Message {
         self.cnt()?;
         let mut out = Vec::new();
         for (i, r) in self.records.iter_mut().enumerate() {
-            // The reading takes a binary record of another type for a tagged one.
-            if let Record::Binary(b) = r {
-                if !(3..=8).contains(&b.record_type()) {
-                    let message = format!(
-                        "a binary record of type {} cannot be written: only Types 3 to 8 are binary",
-                        b.record_type()
-                    );
-                    let e = Error::new(ErrorKind::TypeMismatch, message).with_position(Position {
-                        record_type: Some(b.record_type()),
-                        ..Position::default()
-                    });
-                    return Err(at_record(i)(e));
-                }
-            }
+            check_binary_type(r).map_err(at_record(i))?;
             out.extend(r.to_bytes().map_err(at_record(i))?);
         }
         Ok(out)
@@ -687,6 +674,26 @@ pub(crate) fn rebuild_cnt<'a>(first: &'a mut Record, rest: &[Record]) -> Result<
         .map_err(at_record(i + 1))?;
     }
     Ok(field)
+}
+
+/// A binary record of a type other than 3 to 8, which the reading would
+/// take for a tagged one: refused by both writings.
+pub(crate) fn check_binary_type(r: &Record) -> Result<()> {
+    match r {
+        Record::Binary(b) if !(3..=8).contains(&b.record_type()) => {
+            let message = format!(
+                "a binary record of type {} cannot be written: only Types 3 to 8 are binary",
+                b.record_type()
+            );
+            Err(
+                Error::new(ErrorKind::TypeMismatch, message).with_position(Position {
+                    record_type: Some(b.record_type()),
+                    ..Position::default()
+                }),
+            )
+        }
+        _ => Ok(()),
+    }
 }
 
 /// An IDC holding a separator, which the CNT of the Type-1 copies: the error
