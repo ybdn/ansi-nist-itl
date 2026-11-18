@@ -1,6 +1,7 @@
 # Contributing
 
-Thanks for your interest in `ansi-nist-itl`! Issues and pull requests are welcome.
+Thanks for your interest in `ansi-nist-itl`! Issues and pull requests are welcome. Everyone
+taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Ground rules
 

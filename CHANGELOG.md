@@ -16,6 +16,10 @@ All notable changes to this crate are documented here. The format follows
 
 - MSRV raised from Rust 1.85 to 1.86 (`criterion` 0.8, a dev-dependency used only by the benchmarks, requires it).
 - CI: manual Windows job `test-windows` (`workflow_dispatch` input `run_windows`, off by default, not part of the `ci` status). Run of 2026-11-11 on `windows-latest`: 1155 tests passed, 0 failed, 3 ignored.
+- CI: new jobs, all part of the `ci` status: `deny` (`cargo-deny`: advisories, licences and sources, `deny.toml`; the unmaintained-`chrono` advisory RUSTSEC-2026-0543 is ignored until #99 replaces it), `semver` (`cargo-semver-checks` against the latest release on crates.io), `test-macos` (the test suite on `macos-latest`) and `coverage` (`cargo-llvm-cov`, line coverage in the job summary).
+- Release workflow: a version already on crates.io is not published again and an existing GitHub release is kept, so a missing tag can be pushed afterwards.
+- Repository links point to `ybdn/ansi-nist-itl` (`Cargo.toml`, README, `SECURITY.md`, issue templates) instead of the former `ybdn-ei/ansi-nist-itl`, which only redirected.
+- Community: `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1); the issue templates declare `title` and `assignees`.
 
 ## [1.0.2] - 2026-11-10
 
