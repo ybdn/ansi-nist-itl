@@ -1345,7 +1345,7 @@ const TYPE_10: &[FieldDef] = &[
         record_type: 10, tag: 11, last_tag: 11,
         mnemonic: "CGA", name: "COMPRESSION ALGORITHM",
         condition: Condition::Mandatory, occurrence: Some(Occurrence { min: Limit::Count(1), max: Limit::Count(1) }),
-        kind: FieldKind::Value(Format { char_type: CharType::Alphabetic, min: Some(3), max: Some(5) }),
+        kind: FieldKind::Value(Format { char_type: CharType::Alphanumeric, min: Some(3), max: Some(5) }),
     },
     FieldDef {
         record_type: 10, tag: 12, last_tag: 12,

@@ -7,8 +7,16 @@
 //! rules are written by hand: the Type-1 holds only 7-bit ASCII (section
 //! 5.6), and CNT (1.003) lists the records of the message (section 7.3.1).
 //!
-//! Not checked: the dependent conditions (`D`), the value constraints of
-//! the tables (ranges, code lists), and the content of user-defined fields.
+//! Items that occur more than once follow sections 7.7.12 and 7.7.13: HPO
+//! and VPO repeat as pairs after NOP, which is absent with them or gives their
+//! number; a Type-9 EFS path is one item `x1,y1-x2,y2-…` of non-negative
+//! integers, at least 3 vertices (2 for 9.373 RPS, the open path); a list of
+//! Types 10 to 12 is one item `a|b|c`; user-defined items (18.018) may be any
+//! number, an empty one being a warning.
+//!
+//! Not checked: the other dependent conditions (`D`), the value constraints
+//! of the tables (ranges, code lists), and the content of user-defined
+//! fields and items.
 //! Sizes are counted in bytes, as the crate reads text (one byte, one
 //! character).
 //!
@@ -42,7 +50,8 @@ mod inti;
 use std::fmt;
 
 use crate::dictionary::{
-    CharType, Condition, FieldDef, FieldKind, Format, Limit, Occurrence, Standard, SubfieldGroup,
+    CharType, Condition, FieldDef, FieldKind, Format, ItemDef, Limit, Occurrence, Standard,
+    SubfieldGroup,
 };
 use crate::error::Position;
 use crate::field::AnyField;
@@ -589,40 +598,180 @@ impl Validator {
     fn subfield(&mut self, group: &SubfieldGroup, items: &[String], here: Here) {
         if let Some(format) = group.value {
             match items {
+                // 9.373 RPS: the one open path of the EFS, at least 2 vertices
+                // (section 7.7.12.1; Table 42, note 115).
+                [one] if here.record_type == 9 && here.tag == Some(373) => {
+                    self.path(one, format, 2, 99, here);
+                }
                 [one] => self.value(one, format, Condition::Mandatory, here),
                 _ => self.error(Rule::Structure, here, "expected a single value".into()),
             }
             return;
         }
-        if items.len() > group.items.len() {
+        // 18.018: "user-defined information items (there may be multiple items)":
+        // any number, any content. The table marks them M↑, but NIST's own
+        // conformant samples (BioCTS) leave them empty: an empty one is a warning.
+        if group
+            .items
+            .iter()
+            .all(|d| d.format.char_type == CharType::UserDefined)
+        {
+            for (i, text) in items.iter().enumerate() {
+                if text.is_empty() {
+                    let message = "user-defined item is empty".to_owned();
+                    self.push(Rule::MissingItem, Level::Warning, here.item(i), message);
+                }
+            }
+            return;
+        }
+        // Section 7.7.12.2: after NOP, the items HPO and VPO repeat as pairs, one
+        // pair per vertex.
+        let first_pair = group
+            .items
+            .iter()
+            .position(|d| d.occurrence.max == Limit::DependsOn("NOP"))
+            .unwrap_or(group.items.len());
+        let (fixed, pairs) = group.items.split_at(first_pair);
+        if pairs.is_empty() && items.len() > fixed.len() {
             self.error(
                 Rule::ItemCount,
                 here,
-                format!(
-                    "{} items, at most {} expected",
-                    items.len(),
-                    group.items.len()
-                ),
+                format!("{} items, at most {} expected", items.len(), fixed.len()),
             );
         }
-        for (i, def) in group.items.iter().enumerate() {
-            let here = here.item(i);
-            match items.get(i).filter(|t| !t.is_empty()) {
-                Some(text) => self.value(text, def.format, def.condition, here),
-                None if def.condition == Condition::Mandatory => {
-                    let name = if def.mnemonic.is_empty() {
-                        def.name
-                    } else {
-                        def.mnemonic
-                    };
-                    self.error(
-                        Rule::MissingItem,
-                        here,
-                        format!("mandatory item {name} is empty"),
-                    );
-                }
-                None => {}
+        for (i, def) in fixed.iter().enumerate() {
+            self.item(def, items.get(i), here.item(i));
+        }
+        if !pairs.is_empty() {
+            self.points(fixed, pairs, items, here);
+        }
+    }
+
+    /// One item of a subfield, absent when `text` is `None`.
+    fn item(&mut self, def: &ItemDef, text: Option<&String>, here: Here) {
+        match text.filter(|t| !t.is_empty()) {
+            Some(text) if def.occurrence.max == Limit::Count(1) => {
+                self.value(text, def.format, def.condition, here);
             }
+            Some(text) if def.occurrence.max == Limit::DependsOn("NOP") => {
+                self.value(text, def.format, def.condition, here);
+            }
+            Some(text) => self.list(def, text, here),
+            None if def.condition == Condition::Mandatory => {
+                let name = if def.mnemonic.is_empty() {
+                    def.name
+                } else {
+                    def.mnemonic
+                };
+                self.error(
+                    Rule::MissingItem,
+                    here,
+                    format!("mandatory item {name} is empty"),
+                );
+            }
+            None => {}
+        }
+    }
+
+    /// An item holding several values. Section 7.7.12.1 (Type-9 EFS paths):
+    /// one item `x1,y1-x2,y2-…`, the vertices of a closed path, at least 3.
+    /// Section 7.7.13 (lists, Types 10 to 12): one item `a|b|c`. The
+    /// occurrence of the item counts the vertices or the values.
+    fn list(&mut self, def: &ItemDef, text: &str, here: Here) {
+        let min = match def.occurrence.min {
+            Limit::Count(m) => m as usize,
+            _ => 0,
+        };
+        let max = match def.occurrence.max {
+            Limit::Count(m) => m as usize,
+            _ => usize::MAX,
+        };
+        if here.record_type == 9 {
+            self.path(text, def.format, min.max(3), max, here);
+            return;
+        }
+        let values: Vec<&str> = text.split('|').collect();
+        self.count(values.len(), "values", min, max, here);
+        for v in values {
+            self.value(v, def.format, Condition::Mandatory, here);
+        }
+    }
+
+    /// A Type-9 EFS path in one item (section 7.7.12.1 and its note 71):
+    /// `x1,y1-x2,y2-…`, each vertex "an (X,Y) pair of non-negative integers",
+    /// each integer of `format`.
+    fn path(&mut self, text: &str, format: Format, min: usize, max: usize, here: Here) {
+        let vertices: Vec<&str> = text.split('-').collect();
+        self.count(vertices.len(), "vertices", min, max, here);
+        let integer = |t: &str| !t.is_empty() && t.bytes().all(|b| b.is_ascii_digit());
+        for v in vertices {
+            match v.split(',').collect::<Vec<_>>().as_slice() {
+                [x, y] if integer(x) && integer(y) => {
+                    self.value(x, format, Condition::Mandatory, here);
+                    self.value(y, format, Condition::Mandatory, here);
+                }
+                _ => {
+                    let message = format!("vertex {v:?} is not x,y, two non-negative integers");
+                    self.error(Rule::Structure, here, message);
+                }
+            }
+        }
+    }
+
+    /// `n` vertices or values, between `min` and `max`.
+    fn count(&mut self, n: usize, what: &str, min: usize, max: usize, here: Here) {
+        if n < min {
+            let message = format!("{n} {what}, at least {min} expected");
+            self.error(Rule::ItemCount, here, message);
+        }
+        if n > max {
+            let message = format!("{n} {what}, at most {max} expected");
+            self.error(Rule::ItemCount, here, message);
+        }
+    }
+
+    /// The HPO and VPO pairs after the `fixed` items (section 7.7.12.2): whole
+    /// pairs, as many as NOP says, at least the minimum of the table.
+    fn points(&mut self, fixed: &[ItemDef], pairs: &[ItemDef], items: &[String], here: Here) {
+        let rest = items.get(fixed.len()..).unwrap_or_default();
+        for (k, (def, text)) in pairs.iter().cycle().zip(rest).enumerate() {
+            self.item(def, Some(text), here.item(fixed.len() + k));
+        }
+        let width = pairs.len().max(1);
+        if rest.len() % width != 0 {
+            let message = format!("{} items after NOP, not whole HPO VPO pairs", rest.len());
+            self.error(Rule::ItemCount, here, message);
+        }
+        let points = rest.len() / width;
+        if let Some(Limit::Count(min)) = pairs.first().map(|d| d.occurrence.min) {
+            if points < min as usize {
+                let message = format!("{points} points, at least {min} expected");
+                self.error(Rule::ItemCount, here, message);
+            }
+        }
+        // NOP and the pairs are absent together, or NOP counts the pairs.
+        let Some(i) = fixed.iter().position(|d| d.mnemonic == "NOP") else {
+            return;
+        };
+        match items.get(i).filter(|t| !t.is_empty()) {
+            Some(text) => {
+                if let Ok(nop) = text.parse::<usize>() {
+                    if nop != points {
+                        let message = format!("NOP is {nop}, {points} points follow");
+                        self.error(Rule::ItemCount, here, message);
+                    }
+                }
+            }
+            // A mandatory NOP is already reported as a missing item.
+            None if points > 0
+                && fixed
+                    .get(i)
+                    .is_some_and(|d| d.condition != Condition::Mandatory) =>
+            {
+                let message = format!("NOP is empty, {points} points follow");
+                self.error(Rule::ItemCount, here, message);
+            }
+            None => {}
         }
     }
 

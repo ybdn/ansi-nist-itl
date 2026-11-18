@@ -45,9 +45,10 @@ impl Defaults {
 /// `'%04d%02d%02d'` of `datetime.today()`: the local date.
 #[cfg(feature = "local-date")]
 fn today() -> String {
-    use chrono::Datelike;
-
-    let d = chrono::Local::now().date_naive();
+    // The system time zone, UTC when it cannot be found. Unlike `chrono`
+    // before 1.1, an invalid `TZ` (`TZ=Invalid/Zone`) gives UTC, not the zone
+    // of `/etc/localtime`. `tzdb-concatenated` reads the database of Android.
+    let d = jiff::Zoned::now().date();
     format!("{:04}{:02}{:02}", d.year(), d.month(), d.day())
 }
 

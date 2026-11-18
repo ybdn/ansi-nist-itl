@@ -9,11 +9,7 @@ all-features = true
 # in `ignore` with the advisory id and the reason.
 unmaintained = "all"
 yanked = "deny"
-ignore = [
-    # chrono unmaintained, no known vulnerability; replacing it is tracked in
-    # https://github.com/ybdn/ansi-nist-itl/issues/99
-    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained, replacement tracked in #99" },
-]
+ignore = []
 
 [licenses]
 # Licences compatible with distributing the crate under MIT.

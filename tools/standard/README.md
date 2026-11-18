@@ -25,7 +25,8 @@ How the tables are read:
   plus a stroke, and cannot be told from `<`.
 - Fixes from the text of the standard, each one commented in the script:
   the dates of 18.013, 18.014 and 98.006 (GMT), the user-defined area of the
-  Type-7, the undefined fields 9.142–9.150 of the INCITS 378 block, and
+  Type-7, the undefined fields 9.142–9.150 of the INCITS 378 block, 10.011 (`AN`: its
+  values come from Table 19, which holds `JP2` and `JP2L`; the table says `A`), and
   `LEN` for the record headers (Annex B.2.3.1).
 
 The mnemonics agree with the aliases of the crate (`src/alias/`), except 13.992

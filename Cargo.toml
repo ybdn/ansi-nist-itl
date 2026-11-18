@@ -17,7 +17,7 @@ exclude = ["/fuzz", "/tools", "/docs", "/.github"]
 all-features = true
 
 [dependencies]
-chrono = { version = "0.4.38", default-features = false, features = ["clock"], optional = true }
+jiff = { version = "0.2", default-features = false, features = ["tz-system", "tzdb-zoneinfo", "tzdb-concatenated", "tzdb-bundle-platform"], optional = true }
 serde = { version = "1.0.200", features = ["derive"], optional = true }
 
 [dev-dependencies]
@@ -36,7 +36,7 @@ harness = false
 [features]
 default = ["local-date"]
 # Today's date in local time, as `datetime.today()`; UTC without it.
-local-date = ["dep:chrono"]
+local-date = ["dep:jiff"]
 # Serialize and Deserialize on the model (LIB-23).
 serde = ["dep:serde"]
 # Field dictionary of the standard (LIB-15).
