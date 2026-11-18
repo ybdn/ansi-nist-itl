@@ -10,6 +10,7 @@ All notable changes to this crate are documented here. The format follows
 
 - `encoding::decode` and `encoding::encode` support UTF-16 and UTF-32 (LIB-18, #85). Reading honours a byte order mark and defaults to big-endian; writing is big-endian without a mark. Malformed input (odd length, unpaired surrogate, invalid scalar value) gives `ErrorKind::Decoding`; a character whose encoded bytes include a separator (`0x1C` to `0x1F`) gives `ErrorKind::Encoding`. In these two encodings byte `0x02` is data, not an `STX` switch sequence. `nistitl` 0.6 has no such decoding, so the default parsing is unchanged.
 - Fuzz target `encoding`, run by the CI and the scheduled workflow.
+- `docs/CONFORMANCE.md`: conformance statement (versions, record types, validation levels, encodings, profiles, known deviations) with results on the public NIST BioCTS and NBIS sample files. `tests/conformance.rs` checks every record type and reports on a corpus named by `ANSI_NIST_ITL_CORPUS`.
 
 ### Changed
 
