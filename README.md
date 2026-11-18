@@ -2,7 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/ansi-nist-itl.svg)](https://crates.io/crates/ansi-nist-itl)
 [![docs.rs](https://img.shields.io/docsrs/ansi-nist-itl)](https://docs.rs/ansi-nist-itl)
-[![CI](https://github.com/ybdn-ei/ansi-nist-itl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ybdn-ei/ansi-nist-itl/actions/workflows/ci.yml)
+[![CI](https://github.com/ybdn/ansi-nist-itl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ybdn/ansi-nist-itl/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![MSRV 1.86](https://img.shields.io/badge/MSRV-1.86-orange.svg)](Cargo.toml)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](src/lib.rs)
@@ -24,7 +24,7 @@ exchange, inspect, convert or validate ANSI/NIST-ITL files from Rust, without a 
 | | `nistitl` 0.6 (Python) | `ansi-nist-itl` |
 |---|---|---|
 | Files accepted or refused, bytes written, error messages | reference | **identical**, checked by an oracle bench |
-| Speed on usual messages ([measured](https://github.com/ybdn-ei/ansi-nist-itl/blob/develop/docs/SPEED.md)) | 1× | **3 to 4×** |
+| Speed on usual messages ([measured](https://github.com/ybdn/ansi-nist-itl/blob/develop/docs/SPEED.md)) | 1× | **3 to 4×** |
 | Rewrite a file exactly as read | no (fields re-sorted, LEN and CNT recomputed) | `to_bytes_exact` |
 | Damaged or truncated files | exception | tolerant mode, with located diagnostics |
 | Errors | raw Python exceptions | typed, with record, field and byte offset |
@@ -166,13 +166,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - Validation reports findings against the standard and two profiles; it is not a certification
   by FBI or INTERPOL.
 - Speed figures come from one machine (Apple M1) and one reference implementation
-  ([details](https://github.com/ybdn-ei/ansi-nist-itl/blob/develop/docs/SPEED.md)).
+  ([details](https://github.com/ybdn/ansi-nist-itl/blob/develop/docs/SPEED.md)).
 
 ## Guarantees
 
 - **Parity with `nistitl` 0.6**: an oracle bench runs both on whole corpora and requires the
   same result for every file (synthetic corpora in CI, real ones locally, never committed).
-  See [`tools/oracle/README.md`](https://github.com/ybdn-ei/ansi-nist-itl/blob/develop/tools/oracle/README.md).
+  See [`tools/oracle/README.md`](https://github.com/ybdn/ansi-nist-itl/blob/develop/tools/oracle/README.md).
 - **Robustness**: three fuzz targets (parsing, exact writing, tolerant mode) run in CI; no
   `unsafe`; property tests.
 - **Portability**: pure Rust, no `unsafe`, no I/O; tested on Linux in CI (macOS is not tested in CI). A manual Windows job (`test-windows`, not run on pull requests) runs the test suite on `windows-latest`: on 2026-11-11 (Rust stable, [run 43106411965](https://github.com/ybdn/ansi-nist-itl/actions/runs/43106411965)) all 1155 tests passed, 0 failed, 3 ignored (`cargo test --all-targets` and `--doc`, with default features and with `--all-features`); rerun with `gh workflow run ci.yml -f run_windows=true`; Rust 1.86 or later; works on `&[u8]`
@@ -182,7 +182,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Performance
 
-Same operation (read, then write) on the same corpora, Apple M1 ([details](https://github.com/ybdn-ei/ansi-nist-itl/blob/develop/docs/SPEED.md)):
+Same operation (read, then write) on the same corpora, Apple M1 ([details](https://github.com/ybdn/ansi-nist-itl/blob/develop/docs/SPEED.md)):
 
 | Corpus | ansi-nist-itl | nistitl | |
 |---|---:|---:|---:|
