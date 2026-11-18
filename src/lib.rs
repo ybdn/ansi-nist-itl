@@ -195,6 +195,27 @@
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
+// No input, from a file or through the API, may panic: errors are returned.
+// A proven invariant needs a local `#[allow]` that says why it holds.
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+    clippy::indexing_slicing
+)]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::indexing_slicing
+    )
+)]
 
 pub mod alias;
 mod bytes;
@@ -227,7 +248,7 @@ pub use message::{Message, ParseOptions, Parsed, RecordVisitor, parse_record};
 pub use record::{AsciiRecord, BinaryRecord, FieldKey, ImageHeader, Record, SignatureHeader};
 pub use structfmt::StructValue;
 pub use subfield::SubField;
-pub use value::{Item, Kind, ListElem, PyInt, Scalar, SubValue, Value};
+pub use value::{Item, Kind, ListElem, MAX_ITEM_DEPTH, PyInt, Scalar, SubValue, Value};
 
 // The Rust examples of the README compile (they need the `validation`
 // feature).

@@ -7,6 +7,7 @@ use ansi_nist_itl::{
     AnyField, AsciiRecord, BinaryField, BinaryRecord, Defaults, Field, ImageHeader, Item, Kind,
     Message, PyInt, Scalar, SubField, Value,
 };
+use serde::Deserialize;
 use serde_json::json;
 
 fn defaults() -> Defaults {
@@ -249,6 +250,13 @@ fn checks_of_the_api() {
         error::<Field>(json!({ "record": 2, "tag": 3, "format": "%d:", "value": "" }))
             .contains("format")
     );
+    // A width that would pad the label to gigabytes when written.
+    assert!(
+        error::<Field>(
+            json!({ "record": 2, "tag": 3, "format": "%d.%099999999999d:", "value": "" })
+        )
+        .contains("format")
+    );
     // As with the API, an unknown type fails at its first field.
     assert!(serde_json::from_value::<AsciiRecord>(json!({ "type": 23, "fields": [] })).is_ok());
     assert!(
@@ -314,4 +322,23 @@ fn checks_of_the_form() {
     assert!(r.as_binary().is_some());
     assert!(error::<BinaryRecord>(json!({ "type": 2, "fields": [] })).contains("binary"));
     assert!(error::<AsciiRecord>(json!({ "type": 4, "idc": 1, "bytes": "" })).contains("tagged"));
+}
+
+/// A deserializer without a depth limit of its own (here a JSON value
+/// built in memory) cannot make the deserialization of an item recurse
+/// past `MAX_ITEM_DEPTH`.
+#[test]
+fn deeply_nested_items_are_refused() {
+    let mut deep = json!("x");
+    for _ in 0..1000 {
+        deep = json!([deep]);
+    }
+    let err = Item::deserialize(&deep).unwrap_err().to_string();
+    assert!(err.contains("nested more than 128 levels"), "{err}");
+    let err = serde_json::from_value::<Field>(
+        json!({ "record": 2, "tag": 3, "kind": "SI", "value": [deep] }),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("nested more than 128 levels"), "{err}");
 }
