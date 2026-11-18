@@ -400,7 +400,7 @@ rustfmt, docs and an MSRV `cargo check`, for the feature sets default and
 
 ### `ci.yml`
 
-Triggers: pull requests into `develop` or `main`, push to `main`,
+Triggers: pull requests into `develop`, `preprod` or `prod`, push to `prod`,
 `workflow_call` (used by `release.yml`), `workflow_dispatch` (input
 `run_windows`). On a pull request, the `changes` job (path filter) decides
 which jobs run; on a push, a called run or a manual run, everything runs.
@@ -515,8 +515,8 @@ Conventions: `CHANGELOG.md` follows Keep a Changelog, with an `[Unreleased]`
 section at the top and a dated heading per release (`## [1.0.2] - 2026-11-10`);
 links at the bottom (`[Unreleased]: .../compare/vX.Y.Z...HEAD`). The crate
 follows Semantic Versioning. Branches: work branches start from `develop` and
-are merged into it by pull request; `main` only receives releases
-(`CONTRIBUTING.md`, "Workflow"). Commits follow Conventional Commits.
+are merged into it by pull request; `prod` only receives releases, promoted
+through `preprod` (`CONTRIBUTING.md`, "Workflow"). Commits follow Conventional Commits.
 
 What `.github/workflows/release.yml` does, and what it does not.
 
@@ -526,9 +526,10 @@ What `.github/workflows/release.yml` does, and what it does not.
    `## [Unreleased]` in `CHANGELOG.md` to `## [X.Y.Z] - date`, add a new empty
    `[Unreleased]` and update the link references at the bottom.
 2. Merge it into `develop`, then open a pull request from `develop` into
-   `main` titled "Release X.Y.Z" (as #87 for 1.0.2 and #73 for 1.0.1); `ci.yml`
-   runs on it.
-3. Once it is merged, create the tag `vX.Y.Z` on that `main` commit and push
+   `preprod` titled "Release X.Y.Z" (before the branches were renamed, #87
+   for 1.0.2 and #73 for 1.0.1 went into `main`); `ci.yml` runs on it. Once it
+   is merged, open the pull request from `preprod` into `prod`.
+3. Once it is merged, create the tag `vX.Y.Z` on that `prod` commit and push
    it: the push of the tag triggers `release.yml`.
 
 **Triggers:** a push of a tag `v*`, or a manual `workflow_dispatch`.
@@ -537,7 +538,7 @@ What `.github/workflows/release.yml` does, and what it does not.
 
 | Job | Behaviour |
 |-----|-----------|
-| `verify` | Reads `version` from `Cargo.toml`. For a tag: fails if the tag is not `v<version>`, or if the tagged commit is not an ancestor of `origin/main`. In all cases: fails if `CHANGELOG.md` has no line starting with `## [<version>]` (on a manual run this is a warning only). |
+| `verify` | Reads `version` from `Cargo.toml`. For a tag: fails if the tag is not `v<version>`, or if the tagged commit is not an ancestor of `origin/prod`. In all cases: fails if `CHANGELOG.md` has no line starting with `## [<version>]` (on a manual run this is a warning only). |
 | `ci` | Calls `ci.yml` as a reusable workflow, which runs every job (not a pull request, so no path filter). Needs `verify`. |
 | `publish` | Needs `verify` and `ci`. On a manual run: `cargo publish --dry-run`, and nothing is published. On a tag push: asks `crates.io/api/v1/crates/ansi-nist-itl/<version>`; 200 means already published (not published again), 404 means publish, anything else fails. To publish, it authenticates through Trusted Publishing (`rust-lang/crates-io-auth-action`, OIDC, no stored token) and runs `cargo publish`. |
 | GitHub release (last step of `publish`) | On a tag push: extracts the `## [<version>]` section of `CHANGELOG.md` as the notes and runs `gh release create <tag> --verify-tag`, unless a release for that tag already exists. |
@@ -545,7 +546,7 @@ What `.github/workflows/release.yml` does, and what it does not.
 Consequences stated in the workflow header: it is safe to re-run (a version on
 crates.io is not published twice, an existing GitHub release is kept), and a
 missing tag can be pushed afterwards. Publishing is irreversible, and only a
-tag on `main` can do it. The workflow requires a trusted publisher
+tag on `prod` can do it. The workflow requires a trusted publisher
 (repository and workflow) to be declared on crates.io beforehand; this cannot
 be checked from the repository.
 
