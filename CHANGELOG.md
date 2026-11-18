@@ -8,7 +8,7 @@ All notable changes to this crate are documented here. The format follows
 
 ### Added
 
-- `encoding::decode` and `encoding::encode` support UTF-16 and UTF-32 (LIB-18, #85). Reading honours a byte order mark and defaults to big-endian; writing is big-endian without a mark. Malformed input (odd length, unpaired surrogate, invalid scalar value) gives `ErrorKind::Decoding`; a character whose encoded bytes include a separator (`0x1C` to `0x1F`) gives `ErrorKind::Encoding`. In these two encodings byte `0x02` is data, not an `STX` switch sequence. `nistitl` 0.6 has no such decoding, so the default parsing is unchanged.
+- `encoding::decode` and `encoding::encode` support UTF-16 and UTF-32 (LIB-18, #85). Reading honours a byte order mark and defaults to big-endian; writing is big-endian without a mark. Malformed input (odd length, unpaired surrogate, invalid scalar value) gives `ErrorKind::Decoding`; a character whose encoded bytes include a separator (`0x1C` to `0x1F`) gives `ErrorKind::Encoding`. In these two encodings byte `0x02` is data, not an `STX` switch sequence. The default parsing is unchanged.
 - Fuzz target `encoding`, run by the CI and the scheduled workflow.
 - `docs/CONFORMANCE.md`: conformance statement (versions, record types, validation levels, encodings, profiles, known deviations) with results on the public NIST BioCTS and NBIS sample files. `tests/conformance.rs` checks every record type and reports on a corpus named by `ANSI_NIST_ITL_CORPUS`.
 - Fuzz target `serde`: a message deserialized from any JSON, then written, summarized and validated; run by the CI and the scheduled workflow from the seeds of `fuzz/seeds/serde`.
@@ -28,6 +28,10 @@ All notable changes to this crate are documented here. The format follows
 
 - A tag format with a huge width (`"%d.%099999999999d:"`), given to `Field::with`, `BinaryField::with` or a deserialized field, was accepted and then aborted the process or panicked (capacity overflow) when the field was written. The width of a conversion is now at most 1024; a larger one is rejected as an unsupported tag format (`ErrorKind::BadFormat`).
 - Items nested about 10 000 lists deep, given to `SubField::new`, `SubField::set_value`, `SubField::add_values`, `Field::new`, `Field::with`, `Field::set_value`, `AsciiRecord::set`, `AsciiRecord::set_encoded`, `Message::set_tot` or a deserializer without a depth limit, overflowed the stack (recursive `repr`, writing and `Drop`). A value nested deeper than `MAX_ITEM_DEPTH` is now refused with `BAD_SUBFIELD_VALUE`, and taken apart without recursion.
+
+### Removed
+
+- Every reference to the third-party Python library that served as a comparison oracle: the comparison bench (`tests/oracle.rs`, `tools/oracle/`, `examples/oracle_dump.rs`, CI job `oracle`), the speed comparison (`docs/SPEED.md`, `tools/bench/`), the alias generators that read it, the tests ported from its documentation, and its mention in the README, the package description and the documentation. Conformance is now stated against the standard (`docs/CONFORMANCE.md`). Behaviour and public API are unchanged. `tests/reference_edge_cases.rs` becomes `tests/edge_cases.rs`; the CPython vector generators move to `tools/python/`.
 
 ## [1.0.2] - 2026-11-10
 

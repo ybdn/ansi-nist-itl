@@ -7,5 +7,5 @@ Closes #
 ## Checks
 
 - [ ] `cargo fmt`, `clippy -D warnings`, tests and doc with all features
-- [ ] Parity with `nistitl` kept (oracle bench, if parsing or writing changed)
+- [ ] `docs/CONFORMANCE.md` updated, if conformance changed
 - [ ] CHANGELOG updated

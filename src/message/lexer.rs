@@ -1,11 +1,11 @@
-//! Lexer of tagged records (`parse_record`) and the patterns of
-//! the reference implementation (`RE_TAG_LEN`, `RE_TAG_BEGIN`, `RE_TAG_CONTENT`).
+//! Lexer of tagged records (`parse_record`) and its patterns
+//! (`RE_TAG_LEN`, `RE_TAG_BEGIN`, `RE_TAG_CONTENT`).
 
 use crate::error::{Error, Result};
 use crate::py::{decimal_value, decode_latin1};
 use crate::{FS, GS, RS, US};
 
-/// Receiver of the events of [`parse_record`], the callbacks of the reference implementation.
+/// Receiver of the events of [`parse_record`], the callbacks.
 ///
 /// ```
 /// use ansi_nist_itl::{RecordVisitor, Result, parse_record};
@@ -65,7 +65,7 @@ pub trait RecordVisitor {
 }
 
 /// Splits tagged records into fields, subfields and items, and reports them
-/// to `visitor` (`parse_record` of the reference implementation).
+/// to `visitor` (`parse_record`).
 ///
 /// A final FS is dropped; the buffer is then split on FS, and an empty
 /// record stops the parsing. Each field must start with a label

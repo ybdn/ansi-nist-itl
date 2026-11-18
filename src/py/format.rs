@@ -1,4 +1,4 @@
-//! `%` and `str.format` conversions used by the reference implementation.
+//! `%` and `str.format` conversions used by the crate.
 
 use std::borrow::Cow;
 use std::fmt;

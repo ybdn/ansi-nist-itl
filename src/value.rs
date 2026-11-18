@@ -1,8 +1,7 @@
 //! Values stored in fields, subfields and items.
 //!
-//! the reference implementation stores arbitrary Python objects. The crate covers what it
-//! produces when reading and what its examples write: `None`, `bool`, `int`
-//! and `str` ([`Scalar`]), and lists of them ([`Value`], [`SubValue`],
+//! Values the crate produces when reading and accepts when writing: `None`,
+//! `bool`, `int` and `str` ([`Scalar`]), and lists of them ([`Value`], [`SubValue`],
 //! [`Item`]). `Display` gives Python's `str()`.
 
 use std::cmp::Ordering;
@@ -12,7 +11,7 @@ use crate::py;
 
 /// Arbitrary-precision integer, the equivalent of a Python `int`.
 ///
-/// the reference implementation reads tag numbers, LEN and IDC with Python's `int()`, which has
+/// The crate reads tag numbers, LEN and IDC with Python's `int()`, which has
 /// no upper bound: a tag of 20 digits is valid. `PyInt` keeps the decimal
 /// digits in canonical form (no leading zeros, `0` is never negative) and
 /// only supports what the crate needs: comparison, display and conversion
@@ -218,7 +217,7 @@ impl Scalar {
 }
 
 impl Default for Scalar {
-    /// `""`, the default value of the reference implementation fields and subfields.
+    /// `""`, the default value of fields and subfields.
     fn default() -> Self {
         Scalar::Text(String::new())
     }
@@ -241,7 +240,7 @@ fn repr_list<T>(items: &[T], repr: impl Fn(&T) -> String) -> String {
     format!("[{}]", parts.join(", "))
 }
 
-/// Item of a subfield: a scalar, or a nested list (an edge case of the reference implementation).
+/// Item of a subfield: a scalar, or a nested list (an edge case).
 ///
 /// ```
 /// use ansi_nist_itl::Item;
@@ -676,7 +675,7 @@ impl<T: Into<ListElem>> From<Vec<T>> for Value {
 /// Kind of a field or subfield: the flags `F`, `S` and `I` of the Python `type`.
 ///
 /// `F`: the field may hold a value; `S`: subfields; `I`: items. Only the
-/// presence of the three letters matters, as in the reference implementation.
+/// presence of the three letters matters.
 ///
 /// ```
 /// use ansi_nist_itl::Kind;
