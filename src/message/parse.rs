@@ -10,7 +10,7 @@ use crate::error::{
 };
 use crate::field::{AnyField, BinaryField, Field};
 use crate::py::{decode_latin1, py_int};
-use crate::record::{AsciiRecord, BinaryRecord, FieldKey, RawField, Record};
+use crate::record::{AsciiRecord, BinaryRecord, FieldIndex, RawField, Record};
 use crate::subfield::SubField;
 use crate::value::{Item, PyInt, Scalar, SubValue};
 use crate::{FS, GS};
@@ -256,6 +256,8 @@ impl Notes {
 /// Visitor that fills a tagged record.
 struct TextParser<'a> {
     record: &'a mut AsciiRecord,
+    /// Fields of `record` by tag and alias.
+    fields: &'a mut FieldIndex,
     subfields: Vec<SubField>,
     values: Vec<Item>,
     closed: bool,
@@ -267,9 +269,15 @@ struct TextParser<'a> {
 }
 
 impl<'a> TextParser<'a> {
-    fn new(record: &'a mut AsciiRecord, index: usize, notes: &'a mut Notes) -> Self {
+    fn new(
+        record: &'a mut AsciiRecord,
+        fields: &'a mut FieldIndex,
+        index: usize,
+        notes: &'a mut Notes,
+    ) -> Self {
         TextParser {
             record,
+            fields,
             subfields: Vec::new(),
             values: Vec::new(),
             closed: false,
@@ -350,9 +358,13 @@ impl RecordVisitor for TextParser<'_> {
             }
         };
         let position = self.position(Some(tag.clone()));
-        if !self.record.field(&tag).is_some_and(AnyField::is_truthy) {
+        if !self
+            .record
+            .field_indexed(&tag, self.fields)
+            .is_some_and(AnyField::is_truthy)
+        {
             let field = Field::new(record_type, tag.clone(), "")?;
-            if let Err(e) = self.record.add_field(field) {
+            if let Err(e) = self.record.add_field_indexed(field, self.fields) {
                 // A first occurrence with a simple value: BAD_TAG_DUPLICATE.
                 // The tolerant mode reuses it.
                 let e = locate(e, position.record_index, None, position.offset);
@@ -360,7 +372,7 @@ impl RecordVisitor for TextParser<'_> {
                     .recover(DiagnosticCode::DuplicateTag, Severity::Warning, e)?;
             }
         }
-        let field = match self.record.field_mut(FieldKey::Tag(tag.clone())) {
+        let field = match self.record.field_mut_indexed(&tag, self.fields) {
             Some(AnyField::Text(f)) => f,
             _ => {
                 // A binary field of the same tag (not reachable from a
@@ -456,6 +468,12 @@ struct Parser {
     /// For each record, the bytes read and the bytes of its fields
     /// (LIB-12).
     origins: Vec<(Vec<Bytes>, Vec<RawField>)>,
+    /// Fields by tag and alias of the Type-1 (record 0), kept for the
+    /// whole parsing: a Type-1 read again adds to it, and each binary
+    /// record looks up its CNT.
+    type1_fields: FieldIndex,
+    /// Fields by tag and alias of the last other record read, and its index.
+    record_fields: (usize, FieldIndex),
 }
 
 impl Parser {
@@ -473,6 +491,8 @@ impl Parser {
             data_search: None,
             cnt_chars: None,
             origins: vec![(Vec::new(), Vec::new())],
+            type1_fields: FieldIndex::default(),
+            record_fields: (usize::MAX, FieldIndex::default()),
         };
         // `reset(autocreate=False)`: an empty Type-1.
         parser
@@ -832,7 +852,15 @@ impl Parser {
             return Err(Error::index_out_of_range());
         };
         let record_type = record.record_type();
-        let mut parser = TextParser::new(record, index, &mut self.notes);
+        let fields = if index == 0 {
+            &mut self.type1_fields
+        } else {
+            if self.record_fields.0 != index {
+                self.record_fields = (index, FieldIndex::default());
+            }
+            &mut self.record_fields.1
+        };
+        let mut parser = TextParser::new(record, fields, index, &mut self.notes);
         let lexed = lex(text, offset, &mut parser);
         let (closed, spans) = (parser.closed, parser.spans);
         if let Err(e) = lexed {
@@ -974,7 +1002,7 @@ impl Parser {
             return Err(Error::index_out_of_range());
         };
         // `record.CNT`: the first field whose alias is CNT.
-        let Some(field) = type1.fields().iter().find(|f| f.alias() == alias::CNT) else {
+        let Some(field) = type1.alias_indexed(alias::CNT, &mut self.type1_fields) else {
             return Err(Error::bad_attribute_get(alias::CNT, 1));
         };
         let field = match field {

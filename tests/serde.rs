@@ -3,6 +3,8 @@
 
 #![cfg(feature = "serde")]
 
+mod common;
+
 use ansi_nist_itl::{
     AnyField, AsciiRecord, BinaryField, BinaryRecord, Defaults, Field, ImageHeader, Item, Kind,
     Message, PyInt, Scalar, SubField, Value,
@@ -341,4 +343,21 @@ fn deeply_nested_items_are_refused() {
     .unwrap_err()
     .to_string();
     assert!(err.contains("nested more than 128 levels"), "{err}");
+}
+
+/// Deserializing a record added each field with `add_field`, which checks
+/// it against all the previous ones: quadratic in the number of fields.
+#[test]
+fn deserializing_a_record_is_linear() {
+    let record = |n: usize| {
+        let mut fields = vec![
+            json!({ "tag": 1, "value": 0 }),
+            json!({ "tag": 2, "value": 0 }),
+        ];
+        fields.extend((3..n + 3).map(|tag| json!({ "tag": tag, "value": "v" })));
+        serde_json::to_string(&json!({ "type": 2, "fields": fields })).unwrap()
+    };
+    common::assert_linear("deserialization", 6_000, record, |text| {
+        serde_json::from_str::<AsciiRecord>(text).unwrap();
+    });
 }

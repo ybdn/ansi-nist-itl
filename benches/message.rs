@@ -100,5 +100,58 @@ fn benches(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(message_benches, benches);
+/// A Type-1, then a Type-2 of `fields` text fields: the parsing must stay
+/// linear in the number of fields of a record. The Type-2 is written by
+/// hand: `add_field` checks each field against the previous ones.
+fn many_fields(fields: u32) -> Vec<u8> {
+    let mut msg = Message::with_defaults(&Defaults {
+        date: Some("20200101".into()),
+        tcn: Some("BENCH".into()),
+    });
+    msg.set_tot("CAR").unwrap();
+    let mut r2 = AsciiRecord::new(2).unwrap();
+    r2.set("IDC", 0).unwrap();
+    msg.push(r2).unwrap();
+    let bytes = msg.to_bytes().unwrap();
+    // `1.001:<LEN of the Type-1>`, the CNT listing the Type-2.
+    let digits: String = bytes[6..]
+        .iter()
+        .take_while(|b| b.is_ascii_digit())
+        .map(|&b| char::from(b))
+        .collect();
+    let mut out = bytes[..digits.parse::<usize>().unwrap()].to_vec();
+    let mut body = b"\x1d2.002:0".to_vec();
+    for tag in 3..fields + 3 {
+        body.extend(format!("\x1d2.{tag:03}:V").bytes());
+    }
+    body.push(0x1c);
+    // The fixed point of `LEN = label + digits(LEN) + body`.
+    let mut len = 0;
+    loop {
+        let next = "2.001:".len() + len.to_string().len() + body.len();
+        if next == len {
+            break;
+        }
+        len = next;
+    }
+    out.extend(format!("2.001:{len}").bytes());
+    out.extend(body);
+    out
+}
+
+fn fields(c: &mut Criterion) {
+    let mut group = c.benchmark_group("fields");
+    group.sample_size(10);
+    for n in [10_000, 40_000] {
+        let bytes = many_fields(n);
+        assert!(Message::parse(&bytes).is_ok());
+        group.throughput(Throughput::Bytes(bytes.len() as u64));
+        group.bench_with_input(BenchmarkId::new("parse", n), &bytes, |b, bytes| {
+            b.iter(|| Message::parse(black_box(bytes)).unwrap());
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(message_benches, benches, fields);
 criterion_main!(message_benches);
