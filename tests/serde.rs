@@ -3,6 +3,8 @@
 
 #![cfg(feature = "serde")]
 
+mod common;
+
 use ansi_nist_itl::{
     AnyField, AsciiRecord, BinaryField, BinaryRecord, Defaults, Field, ImageHeader, Item, Kind,
     Message, PyInt, Scalar, SubField, Value,
@@ -355,19 +357,7 @@ fn deserializing_a_record_is_linear() {
         fields.extend((3..n + 3).map(|tag| json!({ "tag": tag, "value": "v" })));
         serde_json::to_string(&json!({ "type": 2, "fields": fields })).unwrap()
     };
-    let best_time = |text: &str| {
-        (0..3)
-            .map(|_| {
-                let start = std::time::Instant::now();
-                serde_json::from_str::<AsciiRecord>(text).unwrap();
-                start.elapsed().as_secs_f64()
-            })
-            .fold(f64::MAX, f64::min)
-    };
-    // About 4 when linear, 16 when quadratic.
-    let ratio = best_time(&record(20_000)) / best_time(&record(5_000));
-    assert!(
-        ratio < 10.0,
-        "4 times the fields take {ratio:.1} times as long"
-    );
+    common::assert_linear("deserialization", 6_000, record, |text| {
+        serde_json::from_str::<AsciiRecord>(text).unwrap();
+    });
 }

@@ -1,11 +1,14 @@
 //! Values that used to panic or exhaust memory: each one now gives an
 //! error (QA-04).
 
+mod common;
+
 use ansi_nist_itl::encoding::CharacterEncoding;
 use ansi_nist_itl::{
     AsciiRecord, Error, Field, Item, ListElem, MAX_ITEM_DEPTH, Message, ParseOptions, SubField,
     Value,
 };
+use common::assert_linear;
 
 /// The width of a tag format pads the label when the field is written: an
 /// unbounded one ended in a capacity overflow or an aborted allocation.
@@ -150,38 +153,15 @@ fn cnt_last(n: usize) -> Vec<u8> {
     out
 }
 
-/// Best of three runs of `f`, in seconds.
-fn best_time(f: impl Fn()) -> f64 {
-    (0..3)
-        .map(|_| {
-            let start = std::time::Instant::now();
-            f();
-            start.elapsed().as_secs_f64()
-        })
-        .fold(f64::MAX, f64::min)
-}
-
-/// Fails if reading `build(4 n)` takes more than 10 times as long as
-/// reading `build(n)`: about 4 when linear, 16 when quadratic. A ratio, so
-/// that slow runners and instrumented builds do not matter.
-fn assert_linear<T>(what: &str, n: usize, build: impl Fn(usize) -> T, run: impl Fn(&T)) {
-    let (small, large) = (build(n), build(4 * n));
-    let ratio = best_time(|| run(&large)) / best_time(|| run(&small));
-    assert!(
-        ratio < 10.0,
-        "{what}: 4 times the input takes {ratio:.1} times as long"
-    );
-}
-
 /// Reading took a time quadratic in the number of fields of a record:
 /// each field was looked up, and checked for duplicates, against all the
 /// previous ones (a 789 KB Type-2 of 80 000 fields took about 30 s).
 #[test]
 fn reading_a_record_is_linear() {
-    assert_linear("one record", 5_000, one_record, |b| {
+    assert_linear("one record", 2_500, one_record, |b| {
         Message::parse(b).unwrap();
     });
-    assert_linear("one record, tolerant", 5_000, one_record, |b| {
+    assert_linear("one record, tolerant", 2_500, one_record, |b| {
         Message::parse_with(b, ParseOptions::tolerant()).unwrap();
     });
 }
@@ -190,7 +170,7 @@ fn reading_a_record_is_linear() {
 /// indexed again each time.
 #[test]
 fn reading_alternating_type1_records_is_linear() {
-    assert_linear("alternating", 2_500, alternating, |b| {
+    assert_linear("alternating", 500, alternating, |b| {
         Message::parse(b).unwrap();
     });
 }
@@ -198,7 +178,7 @@ fn reading_alternating_type1_records_is_linear() {
 /// Each binary record looked the CNT up among all the Type-1 fields.
 #[test]
 fn reading_binary_records_after_a_long_type1_is_linear() {
-    assert_linear("CNT last", 2_500, cnt_last, |b| {
+    assert_linear("CNT last", 1_500, cnt_last, |b| {
         Message::parse(b).unwrap();
     });
 }
@@ -217,7 +197,7 @@ fn exact_rewrite_of_a_changed_record_is_linear() {
             .unwrap();
         msg
     };
-    assert_linear("exact rewrite", 5_000, changed, |msg| {
+    assert_linear("exact rewrite", 8_000, changed, |msg| {
         msg.to_bytes_exact().unwrap();
     });
 }
