@@ -10,7 +10,7 @@ assignees: ""
 
 **What happens**
 
-**What you expected** (what `nistitl` 0.6 does, if you know)
+**What you expected** (with the clause of the standard, if you know it)
 
 **How to reproduce**
 

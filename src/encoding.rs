@@ -1,6 +1,6 @@
 //! Character encodings declared in field 1.015, DCS (LIB-18).
 //!
-//! As the reference implementation, the crate reads and writes text as Latin-1: each byte is
+//! The crate reads and writes text as Latin-1: each byte is
 //! one character. A file whose 1.015 declares UTF-8 therefore reads `"é"`
 //! as `"Ã©"`. This module is opt-in: [`decode`] turns that Latin-1 view into
 //! the text of the declared encoding, [`encode`] does the reverse before
@@ -15,8 +15,7 @@
 //!
 //! UTF-16 and UTF-32 are read from the bytes of the field, with a byte order
 //! mark if there is one and big-endian (RFC 2781, the Unicode default)
-//! otherwise, and written big-endian without a byte order mark. The reference
-//! implementation has no such decoding. As the parser cuts the file at the
+//! otherwise, and written big-endian without a byte order mark. As the parser cuts the file at the
 //! bytes `0x1C` to `0x1F` whatever the encoding, a text whose encoding holds one
 //! (U+1C00 to U+1FFF in UTF-16, for instance) is refused by [`encode`].
 //!
@@ -287,7 +286,7 @@ fn decode_utf32(bytes: &[u8]) -> Result<String> {
 }
 
 /// Turns a text into the Latin-1 view of its bytes in `encoding`, ready to
-/// be set in a field and written as the reference implementation writes text.
+/// be set in a field and written as the crate writes text.
 ///
 /// UTF-16 and UTF-32 are written big-endian without a byte order mark.
 ///

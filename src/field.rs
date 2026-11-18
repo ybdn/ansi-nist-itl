@@ -7,7 +7,7 @@ use crate::py::{PrintfTemplate, encode_latin1, py_int};
 use crate::subfield::SubField;
 use crate::value::{Kind, ListElem, PyInt, Scalar, SubValue, Value};
 
-/// Default tag format of the reference implementation: `'%d.%03d:'`.
+/// Default tag format: `'%d.%03d:'`.
 pub(crate) const DEFAULT_FORMAT: &str = "%d.%03d:";
 
 /// `int(tag)`: the tag given as a number or as text.

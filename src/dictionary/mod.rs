@@ -394,10 +394,10 @@ pub enum Limit {
 mod tests {
     use super::*;
 
-    /// The mnemonics agree with the aliases of the reference implementation, written by hand
+    /// The mnemonics agree with the aliases, written by hand
     /// from another reading of the standard.
     #[test]
-    fn mnemonics_match_the_reference_aliases() {
+    fn mnemonics_match_the_aliases() {
         let std = Standard::Update2015;
         let mut diffs = Vec::new();
         for &t in std.record_types() {
@@ -411,7 +411,7 @@ mod tests {
                 }
             }
         }
-        // the reference implementation names 13.992 T2C; Update 2015 reserves 13.905-13.992.
+        // the aliases name 13.992 T2C; Update 2015 reserves 13.905-13.992.
         assert_eq!(diffs, ["13.992 T2C Some(\"\")"]);
     }
 }
