@@ -1,5 +1,4 @@
-//! Speed of reading and writing on a corpus, to compare with `nistitl`
-//! (`tools/bench/speed.py` does the same in Python; see `docs/SPEED.md`).
+//! Speed of reading and writing on a corpus.
 //!
 //! Every file is loaded first; each pass then reads every file with
 //! `Message::parse` and, when it is accepted, writes it with `to_bytes`.
