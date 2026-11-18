@@ -35,7 +35,7 @@
 //! ```
 
 use crate::error::{Error, ErrorKind, Result};
-use crate::field::AnyField;
+use crate::field::{AnyField, no_separator};
 use crate::message::Message;
 use crate::py::py_int;
 use crate::record::AsciiRecord;
@@ -317,7 +317,11 @@ pub fn encode(text: &str, encoding: CharacterEncoding) -> Result<String> {
     let limit = match encoding {
         CharacterEncoding::Ascii => 0x80,
         CharacterEncoding::Latin1 => 0x100,
-        CharacterEncoding::Utf8 => return separator_free(text.bytes(), encoding),
+        // A separator is one byte in UTF-8, and no other character holds one.
+        CharacterEncoding::Utf8 => {
+            no_separator(text.as_bytes())?;
+            return Ok(text.bytes().map(char::from).collect());
+        }
         CharacterEncoding::Utf16 => {
             return separator_free(text.encode_utf16().flat_map(u16::to_be_bytes), encoding);
         }
@@ -340,7 +344,8 @@ pub fn encode(text: &str, encoding: CharacterEncoding) -> Result<String> {
         ));
     }
     // Below 0x100, a character is its own byte.
-    separator_free(text.chars().map(|c| c as u8), encoding)
+    no_separator(&text.chars().map(|c| c as u8).collect::<Vec<u8>>())?;
+    Ok(text.to_owned())
 }
 
 /// The Latin-1 view of `bytes`, which the parser would cut at a separator.
@@ -418,6 +423,11 @@ impl AsciiRecord {
 
     /// Every text of `value` through [`encode`], then
     /// [`set`](AsciiRecord::set).
+    ///
+    /// A separator (`U+001C` to `U+001F`) is refused here, when the value is
+    /// set, without a field position: the message is the one that
+    /// [`set`](AsciiRecord::set) gives when the record is written, with the
+    /// position of the field.
     ///
     /// ```
     /// use ansi_nist_itl::encoding::CharacterEncoding;

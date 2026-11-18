@@ -125,7 +125,9 @@ pub enum ErrorKind {
     IndexOutOfRange,
     /// `struct.error`: `'B' format requires 0 <= number <= 255`.
     Struct,
-    /// `UnicodeEncodeError`: a character outside Latin-1 cannot be written.
+    /// `UnicodeEncodeError`: a character outside Latin-1 cannot be written;
+    /// also a separator (FS, GS, RS, US) inside a value, which the reading
+    /// would cut the value at.
     Encoding,
     /// `TypeError` / `AttributeError` on an unexpected value type.
     TypeMismatch,
@@ -142,6 +144,10 @@ pub enum ErrorKind {
     /// 1.015, or `None` for an `STX` switch sequence or an index out of
     /// range (`encoding` module); no Python equivalent.
     UnsupportedEncoding(Option<u32>),
+    /// The label of the data field (`999:`) written outside the data field
+    /// of a record type with one: the reading would take it for the start of
+    /// the data; no Python equivalent.
+    DataLabel,
 }
 
 /// Where an error occurred (LIB-11). Never part of [`Display`](fmt::Display).

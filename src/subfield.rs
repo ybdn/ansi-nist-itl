@@ -221,7 +221,9 @@ impl SubField {
     /// Without items: nothing for `None`, the decimal value of an integer,
     /// `True` / `False`, or the Latin-1 text. With items: each item as
     /// `str(item)` in Latin-1 (`None` is written `None`), separated by US.
-    /// A character outside Latin-1 gives an `Encoding` error.
+    /// A character outside Latin-1 gives an `Encoding` error, and so does a
+    /// separator (FS, GS, RS, US) in the value or in an item, which the
+    /// reading would cut it at.
     ///
     /// ```
     /// use ansi_nist_itl::SubField;
@@ -229,6 +231,7 @@ impl SubField {
     /// assert_eq!(SubField::new((), "SI")?.to_bytes()?, b"");
     /// assert_eq!(SubField::new(12, "SI")?.to_bytes()?, b"12");
     /// assert_eq!(SubField::new("é", "SI")?.to_bytes()?, b"\xe9");
+    /// assert!(SubField::new(vec!["a\u{1f}b"], "SI")?.to_bytes().is_err());
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn to_bytes(&self) -> Result<Vec<u8>> {

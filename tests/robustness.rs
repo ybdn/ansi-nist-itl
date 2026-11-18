@@ -22,7 +22,7 @@ fn tag_format_width_is_bounded() {
         let err = Field::with(2, 3, "x", "FSI", format, "").unwrap_err();
         assert!(err.to_string().contains("unsupported tag format"), "{err}");
     }
-    let field = Field::with(2, 3, "x", "FSI", "%d.%1024d:", "").unwrap();
+    let field = Field::with(2, 3, "x", "FSI", "%d.%01024d:", "").unwrap();
     assert_eq!(field.to_bytes().unwrap().len(), 2 + 1024 + 2);
 }
 
