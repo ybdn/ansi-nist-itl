@@ -526,9 +526,12 @@ impl Validator {
             FieldKind::Value(format) => match field {
                 // Binary data (field 999).
                 AnyField::Binary(_) => {}
-                AnyField::Text(f) => match subfields(&f.value()) {
-                    Some(sfs) if sfs.len() == 1 && sfs[0].len() == 1 => {
-                        self.value(&sfs[0][0], format, Condition::Mandatory, here);
+                AnyField::Text(f) => match subfields(&f.value()).as_deref() {
+                    Some([sf]) if sf.len() == 1 => {
+                        // `sf` holds exactly one value.
+                        for one in sf {
+                            self.value(one, format, Condition::Mandatory, here);
+                        }
                     }
                     _ => self.error(Rule::Structure, here, "expected a single value".into()),
                 },

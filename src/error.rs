@@ -131,7 +131,7 @@ pub enum ErrorKind {
     TypeMismatch,
     /// `ValueError` of `min()` on an empty list: `min() iterable argument is empty`.
     EmptySequence,
-    /// Unsupported tag format template (only `%[0][n]d`); no Python equivalent.
+    /// Unsupported tag format template (only `%[0][n]d`, width at most 1024); no Python equivalent.
     BadFormat,
     /// I/O error of the file and reader helpers; no Python equivalent.
     Io(std::io::ErrorKind),
@@ -429,6 +429,17 @@ impl Error {
     /// BAD_SUBFIELD_VALUE: items on a subfield without `I`.
     pub(crate) fn subfield_cannot_have_items() -> Self {
         Error::nist(NistError::BadSubfieldValue, "Subfield cannot have items")
+    }
+
+    /// BAD_SUBFIELD_VALUE: items nested deeper than [`crate::MAX_ITEM_DEPTH`].
+    pub(crate) fn items_too_deep() -> Self {
+        Error::nist(
+            NistError::BadSubfieldValue,
+            format!(
+                "Subfield items nested more than {} levels deep",
+                crate::MAX_ITEM_DEPTH
+            ),
+        )
     }
 
     /// BAD_SUBFIELD_VALUE: subfield with items added to a field without `I`.

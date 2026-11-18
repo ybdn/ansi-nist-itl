@@ -12,7 +12,7 @@
 #   semver      cargo-semver-checks against the latest release on crates.io
 #   test-macos  the test suite on the hosted macOS runner
 #   coverage    line coverage with cargo-llvm-cov, shown in the job summary
-# The long fuzzing (about twenty minutes) and the advisories: scheduled.yml.
+# The long fuzzing (about thirty minutes) and the advisories: scheduled.yml.
 name: CI
 
 on:
@@ -184,6 +184,7 @@ jobs:
           cargo run --example fuzz_seeds -- fuzz/corpus/parse
           cargo run --example fuzz_seeds -- fuzz/corpus/exact
           cargo run --example fuzz_seeds -- fuzz/corpus/parse_tolerant
+          mkdir -p fuzz/corpus/serde && cp fuzz/seeds/serde/*.json fuzz/corpus/serde/
       # The prebuilt cargo-fuzz is a musl binary: its default target would be
       # musl, which the sanitizers do not support.
       - name: Fuzz the parser for one minute
@@ -194,6 +195,8 @@ jobs:
         run: cargo fuzz run parse_tolerant --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
       - name: Fuzz the character encodings for one minute
         run: cargo fuzz run encoding --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
+      - name: Fuzz the deserialization (serde) for one minute
+        run: cargo fuzz run serde --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:

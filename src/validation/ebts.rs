@@ -140,8 +140,7 @@ fn type1(v: &mut Validator, t1: &AsciiRecord) {
 
 /// `NN.NN`.
 fn resolution(s: &str) -> bool {
-    let b = s.as_bytes();
-    b.len() == 5 && b[2] == b'.' && [0, 1, 3, 4].iter().all(|&i| b[i].is_ascii_digit())
+    matches!(s.as_bytes(), [a, b, b'.', c, d] if [a, b, c, d].iter().all(|x| x.is_ascii_digit()))
 }
 
 /// `EBTS #.#`.
