@@ -1,171 +1,171 @@
 # PRD — ansi-nist-itl
 
-> **Statut** : référence, figé au 2026-11-10 (état de la version 1.0.1) ; remplace le brouillon v0.1 du 2026-10-20. Les évolutions futures se décident dans les issues du dépôt. Mise à jour du 2026-11-18 : la crate ne se compare plus à aucune bibliothèque tierce ; sa conformité se mesure à la norme (`docs/CONFORMANCE.md`).
-> **Date** : 2026-11-10
-> **Auteur** : ybdn
-> **Dépôt et crate** : `ansi-nist-itl` — nom disponible sur crates.io au 2026-10-20 ; crate publiée depuis la 1.0.0 (2026-10-23)
-> **Objet** : définir le périmètre de la bibliothèque Rust de lecture/écriture ANSI/NIST-ITL et sert de fondation à NIST Studio (Rust).
+> **Status**: reference. It reflects the `develop` branch on 2026-11-18 (after release 1.0.2, toward 1.1.0). History: frozen on 2026-11-10 as of version 1.0.1; updated on 2026-11-18. It replaces the v0.1 draft of 2026-10-20. Future changes are decided in the repository issues. Conformance is measured against the standard ([`CONFORMANCE.md`](CONFORMANCE.md)).
+> **Date**: 2026-11-18
+> **Author**: ybdn
+> **Repository and crate**: `ansi-nist-itl` — name available on crates.io on 2026-10-20; crate published since 1.0.0 (2026-10-23)
+> **Purpose**: define the scope of the Rust ANSI/NIST-ITL reader-writer library, which is the foundation of NIST Studio (Rust).
 
-**Légende — colonne « Origine »**
+**Legend — "Origin" column**
 
-| Code | Signification |
-|------|---------------|
-| **REF** | Capacité de base d'un lecteur-écrivain ANSI/NIST-ITL |
-| **NEW** | Capacité supplémentaire |
+| Code | Meaning |
+|------|---------|
+| **REF** | Baseline capability of an ANSI/NIST-ITL reader-writer |
+| **NEW** | Additional capability |
 
-**Colonne « Prio. »** : `M` (Must, 1.0) / `S` (Should) / `C` (Could) / `W` (Won't).
-Colonne « Statut » : état dans la version 1.0.1 (*Livré*, *Partiel*, *Non livré*) ; elle renvoie à l'issue ou à la décision de §9 quand quelque chose reste à faire.
-
----
-
-## 1. Contexte
-
-- La v1 de NIST Studio (Python) délègue tout le traitement des fichiers NIST à une bibliothèque Python tierce.
-- La réécriture de NIST Studio en Rust nécessite un équivalent Rust. À notre connaissance, il n'existe pas de bibliothèque ANSI/NIST-ITL Rust complète et maintenue.
-- La bibliothèque est développée **dans un dépôt séparé et publiée en open source**, pour :
-  - la partager (intégrateurs, laboratoires, autres outils de l'écosystème YBDN comme AFIS Console) ;
-  - imposer une API propre, indépendante de toute interface ;
-  - lui donner son propre cycle de versions, sa CI et sa documentation (docs.rs).
-
-NIST Studio **dépend** de la crate (dépendance Cargo), il ne la forke pas :
-
-```
-ansi-nist-itl (public, crates.io)  ◄── dépendance Cargo ──  nist-studio-rust (privé)
-                                   ◄──                      autres outils (AFIS Console, CLI…)
-```
-
-## 2. Objectifs
-
-| # | Objectif | Indicateur |
-|---|----------|------------|
-| O1 | Couverture fonctionnelle de base | Toutes les exigences d'origine REF couvertes |
-| O2 | Fidélité | Aller-retour lecture → écriture identique octet pour octet sur le corpus |
-| O3 | Robustesse | Aucune `panic` sur entrée arbitraire (fuzzing continu) |
-| O4 | Diagnostic | Toute erreur localisée (record, champ, offset) ; ouverture partielle des fichiers abîmés |
-| O5 | Adoption | Publication sur crates.io, documentation complète sur docs.rs |
-
-## 3. Utilisateurs
-
-| Utilisateur | Besoin |
-|-------------|--------|
-| NIST Studio (Rust) | Lecture, édition, écriture, diagnostic, accès aux données image |
-| Outils CLI / scripts | Validation, transformation en lot, extraction |
-| Services (serveur, pipeline) | Parsing rapide, sans état, sans I/O imposée |
-| Développeurs tiers | API documentée, stable, licence libre utilisable depuis du code propriétaire (MIT) |
+**"Prio." column**: `M` (Must, 1.0) / `S` (Should) / `C` (Could) / `W` (Won't).
+"Status" column: state on the `develop` branch on 2026-11-18 (*Delivered*, *Partial*, *Not delivered*); it points to the issue or to the decision in §9 when something remains to be done.
 
 ---
 
-## 4. Périmètre fonctionnel
+## 1. Context
 
-### 4.1 Capacités de base
+- NIST Studio v1 (Python) relies on a third-party library for NIST file processing.
+- Rewriting NIST Studio in Rust requires a Rust equivalent. As far as we know, no complete, maintained ANSI/NIST-ITL library exists in Rust.
+- The library is developed **in a separate repository and published as open source**, in order to:
+  - share it (integrators, laboratories, other tools of the YBDN ecosystem such as AFIS Console);
+  - enforce a clean API, independent of any interface;
+  - give it its own release cycle, CI and documentation (docs.rs).
 
-| ID | Capacité | Attendu en Rust | Origine | Prio. | Statut |
-|----|----------|-----------------|---------|-------|--------|
-| LIB-01 | Parsing d'un message : découpage en records via le CNT (1.003) | Lecture depuis `&[u8]`, `Read` ou chemin | REF | M | Livré |
-| LIB-02 | Records tagués `T.NNN:` (Type-1, 2, 9, 10, 13–21, 98, 99) | Idem | REF | M | Livré |
-| LIB-03 | Records binaires à en-tête fixe (Type-3 à 8), `pack`/`unpack` de l'en-tête | En-têtes typés par type de record | REF | M | Livré |
-| LIB-04 | Hiérarchie champ → sous-champ → item, séparateurs FS `0x1C` / GS `0x1D` / RS `0x1E` / US `0x1F` | Modèle typé `Message` → `Record` → `Field` → `Subfield` → `Item` | REF | M | Livré |
-| LIB-05 | Champs binaires (données image du champ 999, données des Type-3 à 8) | Accès aux octets sans recopie | REF | M | Livré |
-| LIB-06 | Accès par position, par clé `(type, IDC)`, itération par type | API idiomatique (itérateurs) | REF | M | Livré |
-| LIB-07 | Alias de champs (`TOT`, `DAT`, `IDC`, `SLC`, `CGA`, `FGP`, `IMP`…) | Constantes / accesseurs nommés | REF | M | Livré |
-| LIB-08 | Création d'un message avec Type-1 auto-créé et valeurs par défaut | Constructeur / builder | REF | M | Livré |
-| LIB-09 | Ajout / suppression de records et de champs ; Type-1 unique et non supprimable | Idem, garanti par le typage quand possible | REF | M | Livré |
-| LIB-10 | Génération : recalcul de LEN, du CNT (1.003), des IDC | Idem | REF | M | Livré |
-| LIB-11 | Erreurs typées (BAD_RECORD, BAD_TAG_NAME, BAD_TAG_FORMAT, BAD_RECORD_NUMBER, BAD_CONTENT, CANNOT_ADD/DELETE_TYPE1, RECORD_NOT_FOUND, RECORD_NOT_TERMINATED, NIST_TOO_SHORT, NIST_TOO_LONG, BAD_TAG_DUPLICATE, BAD_ALIAS_DUPLICATE, UNKNOWN_ATTRIBUTE, BAD_FIELD/SUBFIELD_VALUE) | `enum Error` équivalent, avec position (record, champ, offset) | REF | M | Livré |
+NIST Studio **depends** on the crate (Cargo dependency); it does not fork it:
 
-### 4.2 Améliorations
+```
+ansi-nist-itl (public, crates.io)  ◄── Cargo dependency ──  nist-studio-rust (private)
+                                   ◄──                      other tools (AFIS Console, CLI…)
+```
 
-| ID | Exigence | Origine | Prio. | Statut |
-|----|----------|---------|-------|--------|
-| LIB-12 | **Écriture fidèle** : un fichier relu puis réécrit sans modification est identique octet pour octet (ordre des champs conservé ; `to_bytes` re-trie et normalise) | NEW | M | Livré (`Message::to_bytes_exact`) |
-| LIB-13 | **Mode tolérant** : ouverture partielle des fichiers tronqués / mal formés + liste de diagnostics (erreurs et avertissements) | NEW | M | Livré (`ParseOptions::tolerant`, `Parsed::diagnostics`) |
-| LIB-14 | Mode strict (la première erreur arrête la lecture) sélectionnable | NEW | M | Livré (`Message::parse`, comportement par défaut) |
-| LIB-15 | Dictionnaire des champs par type : numéro → mnémonique, nom, format, cardinalité | NEW | S | Livré (feature `dictionary`, ANSI/NIST-ITL 1-2011 Update 2015) |
-| LIB-16 | Validation selon la norme : champs obligatoires, formats, cardinalités, cohérence CNT/IDC | NEW | S | Livré (feature `validation`) |
-| LIB-17 | Profils de validation : EBTS 11.2 (FBI) et INT-I 5.03 (INTERPOL) livrés ; les profils nationaux ne sont pas planifiés (l'énumération `Profile` est fermée : un nouveau profil s'ajoute dans la crate) | NEW | S | Partiel : EBTS 11.2 et INT-I 5.03 (`Message::validate_profile`) ; profils nationaux non planifiés (décision du 2026-11-10) |
-| LIB-18 | Encodages déclarés en 1.015 (DCS) : ASCII, Latin-1, UTF-8, UTF-16 et UTF-32 livrés ; les séquences `STX` … `ETX` de l'annexe B.1.8 ne sont pas supportées (texte contenant un `STX` refusé) | NEW | S | Partiel : ASCII, Latin-1, UTF-8, UTF-16 et UTF-32 (module `encoding` ; UTF-16/32 : BOM reconnu, big-endian par défaut et à l'écriture, caractère dont les octets contiennent `0x1C` à `0x1F` refusé à l'encodage ; issue #85) ; `STX` non supporté |
-| LIB-19 | Formats « traditionnels » (versions 0200 à 0500) : lus, réécrits et écrits à l'identique, sans règle de validation par version | NEW | S | Livré (`tests/versions.rs`) |
-| LIB-20 | Accès typé aux métadonnées image communes (résolution, compression, dimensions, position doigt/paume) — **sans décodage** | NEW | M | Livré (module `image`) |
-| LIB-21 | Libellés lisibles des codes (positions FGP, types d'impression IMP, compressions CGA) | NEW | S | Livré (module `codes`) |
-| LIB-22 | Représentation XML ANSI/NIST-ITL (NIEM) | NEW | C | Non livré en 1.x ; envisagé pour une 2.x, sous condition (décision du 2026-11-10) |
-| LIB-23 | Sérialisation `serde` optionnelle (JSON pour débogage / interop) | NEW | C | Livré (feature `serde`) |
+## 2. Objectives
 
-### 4.3 Hors périmètre
+| # | Objective | Indicator |
+|---|-----------|-----------|
+| O1 | Baseline functional coverage | All original REF requirements covered |
+| O2 | Fidelity | Read → write round trip identical byte for byte on the corpus |
+| O3 | Robustness | No `panic` on arbitrary input (continuous fuzzing) |
+| O4 | Diagnostics | Every error located (record, field, offset); partial opening of damaged files |
+| O5 | Adoption | Publication on crates.io, complete documentation on docs.rs |
 
-| Sujet | Raison |
+## 3. Users
+
+| User | Need |
+|------|------|
+| NIST Studio (Rust) | Reading, editing, writing, diagnostics, access to image data |
+| CLI tools / scripts | Validation, batch transformation, extraction |
+| Services (server, pipeline) | Fast, stateless parsing, no imposed I/O |
+| Third-party developers | Documented, stable API; free licence usable from proprietary code (MIT) |
+
+---
+
+## 4. Functional scope
+
+### 4.1 Baseline capabilities
+
+| ID | Capability | Expected in Rust | Origin | Prio. | Status |
+|----|------------|------------------|--------|-------|--------|
+| LIB-01 | Parsing a message: splitting into records via the CNT (1.003) | Reading from `&[u8]`, `Read` or a path | REF | M | Delivered |
+| LIB-02 | Tagged records `T.NNN:` (Type-1, 2, 9, 10, 13–21, 98, 99) | Same | REF | M | Delivered |
+| LIB-03 | Fixed-header binary records (Type-3 to 8), header `pack`/`unpack` | Typed headers per record type | REF | M | Delivered |
+| LIB-04 | Field → subfield → item hierarchy, FS `0x1C` / GS `0x1D` / RS `0x1E` / US `0x1F` separators | Typed model `Message` → `Record` → `Field` → `Subfield` → `Item` | REF | M | Delivered |
+| LIB-05 | Binary fields (image data of field 999, data of Type-3 to 8) | Byte access without copying | REF | M | Delivered |
+| LIB-06 | Access by position, by `(type, IDC)` key, iteration by type | Idiomatic API (iterators) | REF | M | Delivered |
+| LIB-07 | Field aliases (`TOT`, `DAT`, `IDC`, `SLC`, `CGA`, `FGP`, `IMP`…) | Named constants / accessors | REF | M | Delivered |
+| LIB-08 | Creating a message with an auto-created Type-1 and default values | Constructor / builder | REF | M | Delivered |
+| LIB-09 | Adding / removing records and fields; Type-1 unique and not removable | Same, guaranteed by typing where possible | REF | M | Delivered |
+| LIB-10 | Generation: recomputation of LEN, CNT (1.003), IDC | Same | REF | M | Delivered |
+| LIB-11 | Typed errors (BAD_RECORD, BAD_TAG_NAME, BAD_TAG_FORMAT, BAD_RECORD_NUMBER, BAD_CONTENT, CANNOT_ADD/DELETE_TYPE1, RECORD_NOT_FOUND, RECORD_NOT_TERMINATED, NIST_TOO_SHORT, NIST_TOO_LONG, BAD_TAG_DUPLICATE, BAD_ALIAS_DUPLICATE, UNKNOWN_ATTRIBUTE, BAD_FIELD/SUBFIELD_VALUE) | Equivalent `enum Error`, with position (record, field, offset) | REF | M | Delivered |
+
+### 4.2 Enhancements
+
+| ID | Requirement | Origin | Prio. | Status |
+|----|-------------|--------|-------|--------|
+| LIB-12 | **Faithful writing**: a file read and rewritten without modification is identical byte for byte (field order kept; `to_bytes` re-sorts and normalizes) | NEW | M | Delivered (`Message::to_bytes_exact`) |
+| LIB-13 | **Tolerant mode**: partial opening of truncated / malformed files + list of diagnostics (errors and warnings) | NEW | M | Delivered (`ParseOptions::tolerant`, `Parsed::diagnostics`) |
+| LIB-14 | Selectable strict mode (the first error stops reading) | NEW | M | Delivered (`Message::parse`, default behaviour) |
+| LIB-15 | Field dictionary per type: number → mnemonic, name, format, cardinality | NEW | S | Delivered (feature `dictionary`, ANSI/NIST-ITL 1-2011 Update 2015) |
+| LIB-16 | Validation against the standard: mandatory fields, formats, cardinalities, CNT/IDC consistency | NEW | S | Delivered (feature `validation`) |
+| LIB-17 | Validation profiles: EBTS 11.2 (FBI) and INT-I 5.03 (INTERPOL) delivered; national profiles are not planned (the `Profile` enumeration is closed: a new profile is added inside the crate) | NEW | S | Partial: EBTS 11.2 and INT-I 5.03 (`Message::validate_profile`); national profiles not planned (decision of 2026-11-10) |
+| LIB-18 | Encodings declared in 1.015 (DCS): ASCII, Latin-1, UTF-8, UTF-16 and UTF-32 delivered; the `STX` … `ETX` sequences of Annex B.1.8 are not supported (text containing an `STX` is refused) | NEW | S | Partial, only because `STX` is not supported: ASCII, Latin-1, UTF-8, UTF-16 and UTF-32 delivered (module `encoding`, `tests/encoding.rs`; UTF-16/32: BOM recognized, big-endian by default and when writing, character whose bytes contain `0x1C` to `0x1F` refused when encoding; issue #85) |
+| LIB-19 | "Traditional" formats (versions 0200 to 0500): read, rewritten and written identically, with no per-version validation rule | NEW | S | Delivered (`tests/versions.rs`) |
+| LIB-20 | Typed access to the common image metadata (resolution, compression, dimensions, finger/palm position) — **without decoding** | NEW | M | Delivered (module `image`) |
+| LIB-21 | Readable labels for codes (FGP positions, IMP impression types, CGA compressions) | NEW | S | Delivered (module `codes`) |
+| LIB-22 | ANSI/NIST-ITL XML representation (NIEM) | NEW | C | Not delivered in 1.x; considered for a 2.x, under conditions (decision of 2026-11-10) |
+| LIB-23 | Optional `serde` serialization (JSON for debugging / interop) | NEW | C | Delivered (feature `serde`) |
+
+### 4.3 Out of scope
+
+| Topic | Reason |
 |-------|--------|
-| Décodage / encodage d'images (WSQ, JPEG 2000…) | Responsabilité d'une autre crate (pour WSQ : `wsq-codec`, voir ci-dessous) ; la bibliothèque expose les octets bruts et les métadonnées |
-| Interface graphique | Bibliothèque pure |
-| Matching biométrique, extraction de minuties | Hors sujet |
-| Transport réseau (envoi à un AFIS) | Hors sujet |
+| Image decoding / encoding (WSQ, JPEG 2000…) | Responsibility of another crate (for WSQ: `wsq-codec`, see below); the library exposes the raw bytes and the metadata |
+| Graphical interface | Pure library |
+| Biometric matching, minutiae extraction | Out of scope |
+| Network transport (sending to an AFIS) | Out of scope |
 
-**WSQ.** La crate sœur existe : `wsq-codec` (décodeur et encodeur WSQ en Rust, crate publique distincte ; le nom `wsq` est déjà pris sur crates.io par une crate WebSockets). `ansi-nist-itl` n'en dépend pas : le README montre comment une application décode le champ 999 d'un Type-14 avec `wsq-codec`. Une feature optionnelle `wsq`, qui ferait le pont directement dans cette crate, est suivie par l'issue #75, conditionnelle à la sortie de `wsq-codec` 1.0.
+**WSQ.** The sister crate exists: `wsq-codec` (WSQ decoder and encoder in Rust, a separate public crate; the name `wsq` is already taken on crates.io by a WebSockets crate). `ansi-nist-itl` does not depend on it: the README shows how an application decodes field 999 of a Type-14 with `wsq-codec`. An optional `wsq` feature, which would bridge directly in this crate, is tracked by issue #75, conditional on the release of `wsq-codec` 1.0.
 
 ---
 
-## 5. Principes d'API
+## 5. API principles
 
-1. **Aucune I/O imposée** : le cœur travaille sur des octets ; la lecture de fichier est un confort.
-2. **Zéro-copie en lecture** quand c'est possible (emprunts sur le buffer), modèle possédé pour l'édition — arbitrage tranché : modèle possédé unique, octets binaires partagés sans recopie via `Bytes` (LIB-05).
-3. **Erreurs riches** : chaque erreur porte sa position ; jamais de `panic`, jamais d'`unwrap` sur des données d'entrée.
-4. **Typage** plutôt que conventions (types de records, positions, compressions en `enum`).
-5. **Pas d'`unsafe`** (`#![forbid(unsafe_code)]`), sauf justification documentée.
-6. **Dépendances minimales** ; fonctionnalités optionnelles derrière des *features* Cargo (livrées : `serde`, `dictionary`, `validation`, `local-date` ; `xml` n'est pas livrée, voir LIB-22).
-7. **Documentation** : chaque élément public documenté avec exemple exécutable.
+1. **No imposed I/O**: the core works on bytes; reading a file is a convenience.
+2. **Zero-copy on read** where possible (borrows on the buffer), owned model for editing — trade-off settled: a single owned model, binary bytes shared without copying through `Bytes` (LIB-05).
+3. **Rich errors**: every error carries its position; never a `panic`, never an `unwrap` on input data.
+4. **Typing** rather than conventions (record types, positions, compressions as `enum`).
+5. **No `unsafe`** (`#![forbid(unsafe_code)]`), except with documented justification.
+6. **Minimal dependencies**; optional functionality behind Cargo *features* (delivered: `serde`, `dictionary`, `validation`, `local-date`, the last one enabled by default and based on `jiff`; `xml` is not delivered, see LIB-22).
+7. **Documentation**: every public item documented with an executable example.
 
-## 6. Qualité et tests
+## 6. Quality and tests
 
-| ID | Exigence | Prio. | Statut |
-|----|----------|-------|--------|
-| QA-01 | Tests des cas limites de lecture et d'écriture (sorties binaires attendues) | M | Livré (`tests/edge_cases.rs`) |
-| QA-02 | Conformité à la norme sur des fichiers publics du NIST (BioCTS, NBIS) | M | Livré (`tests/conformance.rs`, `docs/CONFORMANCE.md`) ; la comparaison avec une bibliothèque tierce est retirée (2026-11-18) |
-| QA-03 | Aller-retour lecture → écriture → lecture sans perte sur tout le corpus | M | Livré (`tests/conformance.rs` et `tests/properties.rs`) |
-| QA-04 | Fuzzing du parseur (`cargo-fuzz`) en CI | M | Livré (3 cibles `cargo-fuzz`, exécution hebdomadaire planifiée : `.github/workflows/scheduled.yml`) |
-| QA-05 | Tests de propriétés (générer → écrire → relire = identité) | S | Livré (`tests/properties.rs`) |
-| QA-06 | CI : `cargo test`, `clippy -D warnings`, `rustfmt`, `cargo doc`, Linux / macOS / Windows | M | Partiel : Linux seulement (workflow partagé `ybdn-ei/.github`, `ubuntu-latest`) ; macOS et Windows non testés en CI |
-| QA-07 | MSRV (version minimale de Rust) déclarée et testée | S | Livré (MSRV 1.86 déclarée et testée en CI) |
-| QA-08 | Benchmarks (`criterion`) sur des fichiers de taille réaliste | C | Livré (`benches/message.rs`, compilés en CI) |
+| ID | Requirement | Prio. | Status |
+|----|-------------|-------|--------|
+| QA-01 | Tests of the read and write edge cases (expected binary outputs) | M | Delivered (`tests/edge_cases.rs`) |
+| QA-02 | Conformance to the standard on public NIST files (BioCTS, NBIS) | M | Delivered (`tests/conformance.rs`, `docs/CONFORMANCE.md`) |
+| QA-03 | Read → write → read round trip without loss on the whole corpus | M | Delivered (`tests/conformance.rs` and `tests/properties.rs`) |
+| QA-04 | Parser fuzzing (`cargo-fuzz`) in CI | M | Delivered (5 `cargo-fuzz` targets in `fuzz/fuzz_targets`: `parse`, `exact`, `parse_tolerant`, `encoding`, `serde`; one minute per target on every pull request, job `fuzz` of `.github/workflows/ci.yml`; long weekly run: `.github/workflows/scheduled.yml`) |
+| QA-05 | Property tests (generate → write → read back = identity) | S | Delivered (`tests/properties.rs`) |
+| QA-06 | CI: `cargo test`, `clippy -D warnings`, `rustfmt`, `cargo doc`, Linux / macOS / Windows | M | Partial: Linux (shared workflow `ybdn-ei/.github`, `ubuntu-latest`) and macOS (job `test-macos`) in CI; Windows only on manual run (job `test-windows`, `workflow_dispatch` input `run_windows`, not part of the `ci` status) |
+| QA-07 | MSRV (minimum supported Rust version) declared and tested | S | Delivered (MSRV 1.86 declared in `Cargo.toml`; tests run on it, job `msrv-test`) |
+| QA-08 | Benchmarks (`criterion`) on realistically sized files | C | Delivered (`benches/message.rs`, built in CI by the job `bench`: `cargo bench --no-run`) |
 
-### 6.1 Données de test — point critique
+### 6.1 Test data — critical point
 
-Les fichiers réels (corpus de la v1, `nist-files/`) contiennent des **données biométriques et personnelles** : ils ne doivent **jamais** être versionnés dans ce dépôt public.
+The real files (v1 corpus, `nist-files/`) contain **biometric and personal data**: they must **never** be versioned in this public repository.
 
-| ID | Exigence | Prio. | Statut |
-|----|----------|-------|--------|
-| DATA-01 | Dépôt public : uniquement des fichiers **synthétiques** (générés par la crate ou issus d'exemples publics de la norme / du NIST) | M | Livré |
-| DATA-02 | Images de test synthétiques ou libres de droits, sans donnée réelle | M | Livré |
-| DATA-03 | Rapport sur corpus réel (QA-03) exécuté **hors dépôt public** (dépôt privé de tests ou `nist-studio-rust`), via un chemin configurable | M | Livré (`ANSI_NIST_ITL_CORPUS`, voir ci-dessous) |
-| DATA-04 | Garde-fou : hook / CI refusant l'ajout de fichiers NIST non référencés dans une liste blanche | S | Livré (`tools/check-data-files.sh` et liste blanche `tests/data/ALLOWLIST`, job CI `data`) |
+| ID | Requirement | Prio. | Status |
+|----|-------------|-------|--------|
+| DATA-01 | Public repository: **synthetic** files only (generated by the crate or taken from public examples of the standard / of NIST) | M | Delivered |
+| DATA-02 | Synthetic or royalty-free test images, no real data | M | Delivered |
+| DATA-03 | Report on the real corpus (QA-03) run **outside the public repository** (private test repository or `nist-studio-rust`), through a configurable path | M | Delivered (`ANSI_NIST_ITL_CORPUS`, see below) |
+| DATA-04 | Safeguard: hook / CI rejecting NIST files that are not listed in an allowlist | S | Delivered (`tools/check-data-files.sh` and allowlist `tests/data/ALLOWLIST`, CI job `data`) |
 
-**Corpus réel.** Le corpus réel reste sur la machine du mainteneur et n'entre jamais dans le dépôt. Le rapport de corpus (`tests/conformance.rs`) le lit à l'emplacement donné par la variable d'environnement `ANSI_NIST_ITL_CORPUS` ; la même variable permet de lancer le banc de benchmarks sur un corpus réel. L'issue #82 suit ce sujet.
+**Real corpus.** The real corpus stays on the maintainer's machine and never enters the repository. The corpus report (`tests/conformance.rs`) reads it at the location given by the environment variable `ANSI_NIST_ITL_CORPUS`; the `speed` example measures reading and writing on a corpus given by its path (`cargo run --release --example speed -- <file or dir>`). Issue #82 tracks this topic.
 
-## 7. Licence et propriété intellectuelle
+## 7. Licence and intellectual property
 
-- **Licence** : **MIT** (décidé le 2026-11-02, remplace une décision antérieure ; confirmée le 2026-11-10, #78). Fichier `LICENSE` ; `license = "MIT"` dans `Cargo.toml`.
+- **Licence**: **MIT** (decided on 2026-11-02, replacing an earlier decision; confirmed on 2026-11-10, #78). `LICENSE` file; `license = "MIT"` in `Cargo.toml`.
 
-- **Titulaire du copyright** : ybdn, à titre personnel.
-- **Nom** : `ansi-nist-itl` libre sur crates.io au 2026-10-20 ; aucune crate ANSI/NIST-ITL existante (pas de concurrent direct).
+- **Copyright holder**: ybdn, personally.
+- **Name**: `ansi-nist-itl` available on crates.io on 2026-10-20; no ANSI/NIST-ITL crate was published on crates.io on 2026-10-20.
 
-## 8. Jalons proposés
+## 8. Proposed milestones
 
-| Version | Contenu |
+| Version | Content |
 |---------|---------|
-| 0.1 | Lecture des records tagués et binaires, modèle de données, erreurs typées (LIB-01 à 07, LIB-11) |
-| 0.2 | Écriture, recalculs LEN/CNT/IDC, création de message (LIB-08 à 10), aller-retour fidèle (LIB-12) |
-| 0.3 | Mode tolérant + diagnostics (LIB-13, LIB-14), fuzzing en CI |
-| 0.4 | Métadonnées image, libellés, encodages (LIB-18, LIB-20, LIB-21) |
-| 0.5 | Dictionnaire de champs + validation de base (LIB-15, LIB-16) |
-| 1.0 | API stabilisée, documentation complète, publication crates.io |
+| 0.1 | Reading of tagged and binary records, data model, typed errors (LIB-01 to 07, LIB-11) |
+| 0.2 | Writing, LEN/CNT/IDC recomputation, message creation (LIB-08 to 10), faithful round trip (LIB-12) |
+| 0.3 | Tolerant mode + diagnostics (LIB-13, LIB-14), fuzzing in CI |
+| 0.4 | Image metadata, labels, encodings (LIB-18, LIB-20, LIB-21) |
+| 0.5 | Field dictionary + basic validation (LIB-15, LIB-16) |
+| 1.0 | Stabilized API, complete documentation, crates.io publication |
 
-État : jalons atteints. Les versions publiées regroupent les jalons proposés : 0.1.0 (lecture et écriture de base), 0.2.0 (dictionnaire, validation, profils, encodages, métadonnées image, `serde`), 1.0.0 (2026-10-23, API stable), 1.0.1 (2026-11-02, correctif de validation du Type-9). Voir `CHANGELOG.md`.
+State: milestones reached. The published versions group the proposed milestones: 0.1.0 (basic reading and writing), 0.2.0 (dictionary, validation, profiles, encodings, image metadata, `serde`), 1.0.0 (2026-10-23, stable API), 1.0.1 (2026-11-02, Type-9 validation fix), 1.0.2 (2026-11-10, MIT licence, documentation and CI). The `develop` branch carries the work toward 1.1.0 (UTF-16/UTF-32, conformance statement, additional fuzz targets, CI jobs). See `CHANGELOG.md`.
 
-## 9. Questions ouvertes — closes au 2026-11-10
+## 9. Open questions — closed on 2026-11-10
 
-1. ~~Versions de norme à couvrir en 1.0~~ (décidé : les tables du dictionnaire et de la validation sont celles d'ANSI/NIST-ITL 1-2011 Update 2015, versions 0500 à 0502 ; les versions traditionnelles 0200 à 0500 sont lues et écrites sans règle de validation par version, LIB-19 ; les éditions postérieures ne sont pas couvertes)
-2. ~~Profils de validation prioritaires~~ (décidé le 2026-11-10 : EBTS 11.2 et INT-I 5.03 livrés ; profils nationaux non planifiés, LIB-17)
-3. ~~Format XML (NIEM)~~ (décidé le 2026-11-10 : non livré en 1.x, envisagé pour une 2.x sous condition, LIB-22)
-4. ~~Modèle mémoire~~ (décidé : modèle possédé unique, octets binaires partagés sans recopie via `Bytes`, voir §5, principe 2)
-5. ~~Titulaire du copyright~~ (décidé : ybdn, à titre personnel) — compte de publication crates.io à créer / lier au GitHub perso.
-6. ~~Crate WSQ séparée et publique ?~~ (décidé : oui, `wsq-codec`, crate distincte ; feature optionnelle `wsq` suivie par l'issue #75, conditionnelle à `wsq-codec` 1.0, voir §4.3)
-7. ~~Langue de la documentation publique~~ (décidé : anglais pour le README, la documentation rustdoc, le CHANGELOG et les commentaires du code ; ce PRD reste en français)
-8. ~~Encodages de 1.015~~ (décidé le 2026-11-10 : ASCII, Latin-1, UTF-8, UTF-16 et UTF-32 livrés, issue #85 ; `STX` non supporté, LIB-18)
+1. ~~Standard versions to cover in 1.0~~ (decided: the dictionary and validation tables are those of ANSI/NIST-ITL 1-2011 Update 2015, versions 0500 to 0502; traditional versions 0200 to 0500 are read and written with no per-version validation rule, LIB-19; later editions are not covered)
+2. ~~Priority validation profiles~~ (decided on 2026-11-10: EBTS 11.2 and INT-I 5.03 delivered; national profiles not planned, LIB-17)
+3. ~~XML format (NIEM)~~ (decided on 2026-11-10: not delivered in 1.x, considered for a 2.x under conditions, LIB-22)
+4. ~~Memory model~~ (decided: a single owned model, binary bytes shared without copying through `Bytes`, see §5, principle 2)
+5. ~~Copyright holder~~ (decided: ybdn, personally) — crates.io publishing account to be created / linked to the personal GitHub.
+6. ~~Separate, public WSQ crate?~~ (decided: yes, `wsq-codec`, a separate crate; optional `wsq` feature tracked by issue #75, conditional on `wsq-codec` 1.0, see §4.3)
+7. ~~Language of the public documentation~~ (decided: English for the README, the rustdoc documentation, the CHANGELOG and the code comments; decided on 2026-11-18 that this PRD is in English too)
+8. ~~Encodings of 1.015~~ (decided on 2026-11-10: ASCII, Latin-1, UTF-8, UTF-16 and UTF-32 delivered, issue #85; `STX` not supported, LIB-18)
