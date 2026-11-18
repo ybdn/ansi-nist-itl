@@ -1,4 +1,4 @@
-//! Edge cases of the reference implementation, checked against it (QA-02).
+//! Edge cases of reading and writing.
 //!
 //! One test per case: same values read, same bytes written, or same text
 //! for the error.

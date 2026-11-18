@@ -1,17 +1,17 @@
 # PRD — ansi-nist-itl
 
-> **Statut** : référence, figé au 2026-11-10 (état de la version 1.0.1) ; remplace le brouillon v0.1 du 2026-10-20. Les évolutions futures se décident dans les issues du dépôt.
+> **Statut** : référence, figé au 2026-11-10 (état de la version 1.0.1) ; remplace le brouillon v0.1 du 2026-10-20. Les évolutions futures se décident dans les issues du dépôt. Mise à jour du 2026-11-18 : la crate ne se compare plus à aucune bibliothèque tierce ; sa conformité se mesure à la norme (`docs/CONFORMANCE.md`).
 > **Date** : 2026-11-10
 > **Auteur** : ybdn
 > **Dépôt et crate** : `ansi-nist-itl` — nom disponible sur crates.io au 2026-10-20 ; crate publiée depuis la 1.0.0 (2026-10-23)
-> **Objet** : définir le périmètre de la bibliothèque Rust de lecture/écriture ANSI/NIST-ITL, qui remplace la bibliothèque Python la référence et sert de fondation à NIST Studio (Rust).
+> **Objet** : définir le périmètre de la bibliothèque Rust de lecture/écriture ANSI/NIST-ITL et sert de fondation à NIST Studio (Rust).
 
 **Légende — colonne « Origine »**
 
 | Code | Signification |
 |------|---------------|
-| **REF** | Capacité présente dans la référence → parité attendue |
-| **NEW** | Absente de la référence → amélioration |
+| **REF** | Capacité de base d'un lecteur-écrivain ANSI/NIST-ITL |
+| **NEW** | Capacité supplémentaire |
 
 **Colonne « Prio. »** : `M` (Must, 1.0) / `S` (Should) / `C` (Could) / `W` (Won't).
 Colonne « Statut » : état dans la version 1.0.1 (*Livré*, *Partiel*, *Non livré*) ; elle renvoie à l'issue ou à la décision de §9 quand quelque chose reste à faire.
@@ -20,7 +20,7 @@ Colonne « Statut » : état dans la version 1.0.1 (*Livré*, *Partiel*, *Non li
 
 ## 1. Contexte
 
-- La v1 de NIST Studio (Python) délègue tout le traitement des fichiers NIST à la référence (v0.6, ~1 900 lignes).
+- La v1 de NIST Studio (Python) délègue tout le traitement des fichiers NIST à une bibliothèque Python tierce.
 - La réécriture de NIST Studio en Rust nécessite un équivalent Rust. À notre connaissance, il n'existe pas de bibliothèque ANSI/NIST-ITL Rust complète et maintenue.
 - La bibliothèque est développée **dans un dépôt séparé et publiée en open source**, pour :
   - la partager (intégrateurs, laboratoires, autres outils de l'écosystème YBDN comme AFIS Console) ;
@@ -38,7 +38,7 @@ ansi-nist-itl (public, crates.io)  ◄── dépendance Cargo ──  nist-stud
 
 | # | Objectif | Indicateur |
 |---|----------|------------|
-| O1 | Parité fonctionnelle avec la référence | Toutes les exigences d'origine REF couvertes ; doctests la référence portés au vert |
+| O1 | Couverture fonctionnelle de base | Toutes les exigences d'origine REF couvertes |
 | O2 | Fidélité | Aller-retour lecture → écriture identique octet pour octet sur le corpus |
 | O3 | Robustesse | Aucune `panic` sur entrée arbitraire (fuzzing continu) |
 | O4 | Diagnostic | Toute erreur localisée (record, champ, offset) ; ouverture partielle des fichiers abîmés |
@@ -57,7 +57,7 @@ ansi-nist-itl (public, crates.io)  ◄── dépendance Cargo ──  nist-stud
 
 ## 4. Périmètre fonctionnel
 
-### 4.1 Parité avec la référence
+### 4.1 Capacités de base
 
 | ID | Capacité | Attendu en Rust | Origine | Prio. | Statut |
 |----|----------|-----------------|---------|-------|--------|
@@ -77,9 +77,9 @@ ansi-nist-itl (public, crates.io)  ◄── dépendance Cargo ──  nist-stud
 
 | ID | Exigence | Origine | Prio. | Statut |
 |----|----------|---------|-------|--------|
-| LIB-12 | **Écriture fidèle** : un fichier relu puis réécrit sans modification est identique octet pour octet (ordre des champs conservé ; la référence re-trie et normalise) | NEW | M | Livré (`Message::to_bytes_exact`) |
+| LIB-12 | **Écriture fidèle** : un fichier relu puis réécrit sans modification est identique octet pour octet (ordre des champs conservé ; `to_bytes` re-trie et normalise) | NEW | M | Livré (`Message::to_bytes_exact`) |
 | LIB-13 | **Mode tolérant** : ouverture partielle des fichiers tronqués / mal formés + liste de diagnostics (erreurs et avertissements) | NEW | M | Livré (`ParseOptions::tolerant`, `Parsed::diagnostics`) |
-| LIB-14 | Mode strict (comportement la référence) sélectionnable | NEW | M | Livré (`Message::parse`, comportement par défaut) |
+| LIB-14 | Mode strict (la première erreur arrête la lecture) sélectionnable | NEW | M | Livré (`Message::parse`, comportement par défaut) |
 | LIB-15 | Dictionnaire des champs par type : numéro → mnémonique, nom, format, cardinalité | NEW | S | Livré (feature `dictionary`, ANSI/NIST-ITL 1-2011 Update 2015) |
 | LIB-16 | Validation selon la norme : champs obligatoires, formats, cardinalités, cohérence CNT/IDC | NEW | S | Livré (feature `validation`) |
 | LIB-17 | Profils de validation : EBTS 11.2 (FBI) et INT-I 5.03 (INTERPOL) livrés ; les profils nationaux ne sont pas planifiés (l'énumération `Profile` est fermée : un nouveau profil s'ajoute dans la crate) | NEW | S | Partiel : EBTS 11.2 et INT-I 5.03 (`Message::validate_profile`) ; profils nationaux non planifiés (décision du 2026-11-10) |
@@ -117,9 +117,9 @@ ansi-nist-itl (public, crates.io)  ◄── dépendance Cargo ──  nist-stud
 
 | ID | Exigence | Prio. | Statut |
 |----|----------|-------|--------|
-| QA-01 | Portage des doctests de la référence comme tests unitaires (sorties binaires attendues) | M | Livré (`tests/reference_doctests.rs`) |
-| QA-02 | Test d'oracle : sur le corpus, la structure parsée est identique à celle de la référence (types, IDC, champs, valeurs) | M | Livré (`tests/oracle.rs`, `tools/oracle/`) |
-| QA-03 | Aller-retour lecture → écriture → lecture sans perte sur tout le corpus | M | Livré (oracle et `tests/properties.rs`) |
+| QA-01 | Tests des cas limites de lecture et d'écriture (sorties binaires attendues) | M | Livré (`tests/edge_cases.rs`) |
+| QA-02 | Conformité à la norme sur des fichiers publics du NIST (BioCTS, NBIS) | M | Livré (`tests/conformance.rs`, `docs/CONFORMANCE.md`) ; la comparaison avec une bibliothèque tierce est retirée (2026-11-18) |
+| QA-03 | Aller-retour lecture → écriture → lecture sans perte sur tout le corpus | M | Livré (`tests/conformance.rs` et `tests/properties.rs`) |
 | QA-04 | Fuzzing du parseur (`cargo-fuzz`) en CI | M | Livré (3 cibles `cargo-fuzz`, exécution hebdomadaire planifiée : `.github/workflows/scheduled.yml`) |
 | QA-05 | Tests de propriétés (générer → écrire → relire = identité) | S | Livré (`tests/properties.rs`) |
 | QA-06 | CI : `cargo test`, `clippy -D warnings`, `rustfmt`, `cargo doc`, Linux / macOS / Windows | M | Partiel : Linux seulement (workflow partagé `ybdn-ei/.github`, `ubuntu-latest`) ; macOS et Windows non testés en CI |
@@ -134,15 +134,14 @@ Les fichiers réels (corpus de la v1, `nist-files/`) contiennent des **données 
 |----|----------|-------|--------|
 | DATA-01 | Dépôt public : uniquement des fichiers **synthétiques** (générés par la crate ou issus d'exemples publics de la norme / du NIST) | M | Livré |
 | DATA-02 | Images de test synthétiques ou libres de droits, sans donnée réelle | M | Livré |
-| DATA-03 | Test d'oracle sur corpus réel (QA-02, QA-03) exécuté **hors dépôt public** (dépôt privé de tests ou `nist-studio-rust`), via un chemin configurable | M | Livré (`ANSI_NIST_ITL_CORPUS`, voir ci-dessous) |
+| DATA-03 | Rapport sur corpus réel (QA-03) exécuté **hors dépôt public** (dépôt privé de tests ou `nist-studio-rust`), via un chemin configurable | M | Livré (`ANSI_NIST_ITL_CORPUS`, voir ci-dessous) |
 | DATA-04 | Garde-fou : hook / CI refusant l'ajout de fichiers NIST non référencés dans une liste blanche | S | Livré (`tools/check-data-files.sh` et liste blanche `tests/data/ALLOWLIST`, job CI `data`) |
 
-**Corpus réel et banc d'oracle.** Le corpus réel reste sur la machine du mainteneur et n'entre jamais dans le dépôt. Le banc d'oracle (`tests/oracle.rs`, avec `tools/oracle/dump.py` pour la référence Python) le lit à l'emplacement donné par la variable d'environnement `ANSI_NIST_ITL_CORPUS` ; la même variable permet de lancer le banc de benchmarks sur un corpus réel. L'issue #82 suit ce sujet. La CI exécute le banc d'oracle sur un corpus synthétique de 20 000 fichiers (`tools/oracle/gen_corpus.py`, graine = numéro d'exécution). Voir `tools/oracle/README.md`.
+**Corpus réel.** Le corpus réel reste sur la machine du mainteneur et n'entre jamais dans le dépôt. Le rapport de corpus (`tests/conformance.rs`) le lit à l'emplacement donné par la variable d'environnement `ANSI_NIST_ITL_CORPUS` ; la même variable permet de lancer le banc de benchmarks sur un corpus réel. L'issue #82 suit ce sujet.
 
 ## 7. Licence et propriété intellectuelle
 
-- **Licence** : **MIT** (décidé le 2026-11-02, remplace une décision antérieure ; confirmée le 2026-11-10, #78). Fichier `LICENSE` ; `license = "MIT"` dans `Cargo.toml`. `nistitl` (IDEMIA, CeCILL-C) est cité comme référence de compatibilité : oracle de test uniquement, ni distribué ni dépendance.
-- **Nom** : pas de reprise du nom la référence.
+- **Licence** : **MIT** (décidé le 2026-11-02, remplace une décision antérieure ; confirmée le 2026-11-10, #78). Fichier `LICENSE` ; `license = "MIT"` dans `Cargo.toml`.
 
 - **Titulaire du copyright** : ybdn, à titre personnel.
 - **Nom** : `ansi-nist-itl` libre sur crates.io au 2026-10-20 ; aucune crate ANSI/NIST-ITL existante (pas de concurrent direct).
@@ -156,9 +155,9 @@ Les fichiers réels (corpus de la v1, `nist-files/`) contiennent des **données 
 | 0.3 | Mode tolérant + diagnostics (LIB-13, LIB-14), fuzzing en CI |
 | 0.4 | Métadonnées image, libellés, encodages (LIB-18, LIB-20, LIB-21) |
 | 0.5 | Dictionnaire de champs + validation de base (LIB-15, LIB-16) |
-| 1.0 | API stabilisée, parité la référence validée par oracle, documentation complète, publication crates.io |
+| 1.0 | API stabilisée, documentation complète, publication crates.io |
 
-État : jalons atteints. Les versions publiées regroupent les jalons proposés : 0.1.0 (parité avec la référence), 0.2.0 (dictionnaire, validation, profils, encodages, métadonnées image, `serde`), 1.0.0 (2026-10-23, API stable), 1.0.1 (2026-11-02, correctif de validation du Type-9). Voir `CHANGELOG.md`.
+État : jalons atteints. Les versions publiées regroupent les jalons proposés : 0.1.0 (lecture et écriture de base), 0.2.0 (dictionnaire, validation, profils, encodages, métadonnées image, `serde`), 1.0.0 (2026-10-23, API stable), 1.0.1 (2026-11-02, correctif de validation du Type-9). Voir `CHANGELOG.md`.
 
 ## 9. Questions ouvertes — closes au 2026-11-10
 

@@ -8,7 +8,7 @@ of the f64, big-endian; output: `repr(float)`).
 
 Usage (from the repository root):
 
-    python3.12 -I tools/oracle/gen_py_vectors.py /tmp/py_vectors.tsv [seed]
+    python3.12 -I tools/python/gen_py_vectors.py /tmp/py_vectors.tsv [seed]
     ANSI_NIST_ITL_PY_VECTORS=/tmp/py_vectors.tsv cargo test --release -- --ignored cpython_vectors
 
 The file (about 100 MB) is not committed.
