@@ -17,15 +17,18 @@ All notable changes to this crate are documented here. The format follows
 
 ### Changed
 
+- Feature `local-date`: today's date comes from `jiff` instead of `chrono`, which is unmaintained (RUSTSEC-2026-0543, #99). Same behaviour: the date in the system time zone, UTC when it cannot be found; the exception is removed from `deny.toml`.
 - MSRV raised from Rust 1.85 to 1.86 (`criterion` 0.8, a dev-dependency used only by the benchmarks, requires it).
 - CI: manual Windows job `test-windows` (`workflow_dispatch` input `run_windows`, off by default, not part of the `ci` status). Run of 2026-11-11 on `windows-latest`: 1155 tests passed, 0 failed, 3 ignored.
-- CI: new jobs, all part of the `ci` status: `deny` (`cargo-deny`: advisories, licences and sources, `deny.toml`; the unmaintained-`chrono` advisory RUSTSEC-2026-0543 is ignored until #99 replaces it), `semver` (`cargo-semver-checks` against the latest release on crates.io), `test-macos` (the test suite on `macos-latest`) and `coverage` (`cargo-llvm-cov`, line coverage in the job summary).
+- CI: new jobs, all part of the `ci` status: `deny` (`cargo-deny`: advisories, licences and sources, `deny.toml`), `semver` (`cargo-semver-checks` against the latest release on crates.io), `test-macos` (the test suite on `macos-latest`) and `coverage` (`cargo-llvm-cov`, line coverage in the job summary).
 - Release workflow: a version already on crates.io is not published again and an existing GitHub release is kept, so a missing tag can be pushed afterwards.
 - Repository links point to `ybdn/ansi-nist-itl` (`Cargo.toml`, README, `SECURITY.md`, issue templates) instead of the former `ybdn-ei/ansi-nist-itl`, which only redirected.
 - Community: `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1); the issue templates declare `title` and `assignees`.
 
 ### Fixed
 
+- Validation of repeated items (#97). HPO and VPO now repeat as pairs after NOP, as many as NOP says (section 7.7.12.2); a Type-9 EFS path is one item `x1,y1-x2,y2-…` of at least 3 vertices (section 7.7.12.1); a list of Types 10 to 12 is one item `a|b|c` (section 7.7.13); user-defined items (18.018) are not checked. Before, the items were matched one to one with their definitions, which reported valid point lists, paths and lists as errors.
+- 10.011 (CGA, Type-10) is `AN`, not `A`: its values come from Table 19, which holds `JP2` and `JP2L` (notes 150 and 151 of the Type-10 table). JPEG 2000 face images were reported invalid.
 - A tag format with a huge width (`"%d.%099999999999d:"`), given to `Field::with`, `BinaryField::with` or a deserialized field, was accepted and then aborted the process or panicked (capacity overflow) when the field was written. The width of a conversion is now at most 1024; a larger one is rejected as an unsupported tag format (`ErrorKind::BadFormat`).
 - Items nested about 10 000 lists deep, given to `SubField::new`, `SubField::set_value`, `SubField::add_values`, `Field::new`, `Field::with`, `Field::set_value`, `AsciiRecord::set`, `AsciiRecord::set_encoded`, `Message::set_tot` or a deserializer without a depth limit, overflowed the stack (recursive `repr`, writing and `Drop`). A value nested deeper than `MAX_ITEM_DEPTH` is now refused with `BAD_SUBFIELD_VALUE`, and taken apart without recursion.
 
