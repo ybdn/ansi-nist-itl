@@ -340,10 +340,11 @@ fn guide_examples_are_tested() {
         out
     }
     assert_eq!(squeeze("let a = \"x  y\";\n b"), "leta=\"x  y\";b");
-    let guide = include_str!("../docs/GUIDE.md");
+    // A Windows checkout may have CRLF line endings.
+    let guide = include_str!("../docs/GUIDE.md").replace("\r\n", "\n");
     let tests = squeeze(include_str!("guide.rs"));
     let mut blocks = 0;
-    let mut rest = guide;
+    let mut rest = guide.as_str();
     while let Some(start) = rest.find("```rust\n") {
         let body = &rest[start + "```rust\n".len()..];
         let end = body
