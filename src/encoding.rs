@@ -291,9 +291,9 @@ fn decode_utf32(bytes: &[u8]) -> Result<String> {
 /// UTF-16 and UTF-32 are written big-endian without a byte order mark.
 ///
 /// Fails with [`ErrorKind::Encoding`] for a character the encoding cannot
-/// hold (in UTF-16 and UTF-32, one whose bytes include `0x1C` to `0x1F`, the
-/// separators of the file), and with [`ErrorKind::UnsupportedEncoding`] as
-/// [`decode`].
+/// hold, or whose bytes include `0x1C` to `0x1F`, the separators of the file
+/// (the character itself in ASCII, Latin-1 and UTF-8), and with
+/// [`ErrorKind::UnsupportedEncoding`] as [`decode`].
 ///
 /// ```
 /// use ansi_nist_itl::encoding::{encode, CharacterEncoding};
@@ -304,6 +304,7 @@ fn decode_utf32(bytes: &[u8]) -> Result<String> {
 /// assert_eq!(encode("€", CharacterEncoding::Latin1).unwrap_err().kind(), &ErrorKind::Encoding);
 /// assert_eq!(encode("é", CharacterEncoding::Utf16)?, "\0\u{e9}");
 /// assert_eq!(encode("é", CharacterEncoding::Utf32)?, "\0\0\0\u{e9}");
+/// assert_eq!(encode("a\u{1c}b", CharacterEncoding::Utf8).unwrap_err().kind(), &ErrorKind::Encoding);
 /// # Ok::<(), ansi_nist_itl::Error>(())
 /// ```
 pub fn encode(text: &str, encoding: CharacterEncoding) -> Result<String> {
@@ -316,7 +317,7 @@ pub fn encode(text: &str, encoding: CharacterEncoding) -> Result<String> {
     let limit = match encoding {
         CharacterEncoding::Ascii => 0x80,
         CharacterEncoding::Latin1 => 0x100,
-        CharacterEncoding::Utf8 => return Ok(text.bytes().map(char::from).collect()),
+        CharacterEncoding::Utf8 => return separator_free(text.bytes(), encoding),
         CharacterEncoding::Utf16 => {
             return separator_free(text.encode_utf16().flat_map(u16::to_be_bytes), encoding);
         }
@@ -338,7 +339,8 @@ pub fn encode(text: &str, encoding: CharacterEncoding) -> Result<String> {
             ),
         ));
     }
-    Ok(text.to_owned())
+    // Below 0x100, a character is its own byte.
+    separator_free(text.chars().map(|c| c as u8), encoding)
 }
 
 /// The Latin-1 view of `bytes`, which the parser would cut at a separator.

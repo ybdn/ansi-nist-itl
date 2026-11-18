@@ -2,6 +2,7 @@
 
 use crate::US;
 use crate::error::{Error, Result};
+use crate::field::no_separator;
 use crate::py::encode_latin1;
 use crate::value::{Item, Kind, Scalar, SubValue, check_depth};
 
@@ -234,7 +235,11 @@ impl SubField {
         if self.values.is_empty() {
             return match &self.value {
                 Scalar::Null => Ok(Vec::new()),
-                Scalar::Text(s) => Ok(encode_latin1(s)?),
+                Scalar::Text(s) => {
+                    let bytes = encode_latin1(s)?;
+                    no_separator(&bytes)?;
+                    Ok(bytes)
+                }
                 other => Ok(other.to_string().into_bytes()),
             };
         }
@@ -243,7 +248,9 @@ impl SubField {
             if i > 0 {
                 out.push(US);
             }
-            out.extend(encode_latin1(&item.to_string())?);
+            let bytes = encode_latin1(&item.to_string())?;
+            no_separator(&bytes)?;
+            out.extend(bytes);
         }
         Ok(out)
     }

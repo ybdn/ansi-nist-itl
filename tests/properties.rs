@@ -3,6 +3,8 @@
 //! Messages are generated through the API, in the forms that the crate
 //! reads back as written: Latin-1 text without separators nor `999:`,
 //! lists of at least two subfields or items, no `None`, no alias of its own.
+//! "Dirty" messages add separators, `999:` and labels ending in `999:`: the
+//! writing must refuse them or write a message read back as written.
 
 use ansi_nist_itl::{
     AsciiRecord, BinaryField, BinaryRecord, Defaults, Field, ListElem, Message, Record, Value,
@@ -32,16 +34,31 @@ fn text() -> impl Strategy<Value = String> {
     .prop_filter("no 999:", |s| !s.contains("999:"))
 }
 
+/// A text that may hold a separator (0x1C–0x1F) or `999:`.
+fn dirty_text() -> BoxedStrategy<String> {
+    prop_oneof![
+        2 => text(),
+        1 => (text(), 0x1Cu8..=0x1F, text())
+            .prop_map(|(a, s, b)| format!("{a}{}{b}", char::from(s))),
+        1 => (text(), text()).prop_map(|(a, b)| format!("{a}999:{b}")),
+    ]
+    .boxed()
+}
+
+fn some_text(dirty: bool) -> BoxedStrategy<String> {
+    if dirty { dirty_text() } else { text().boxed() }
+}
+
 /// A value read back as written: a text, a number, or lists of at least
 /// two elements.
-fn value() -> impl Strategy<Value = Value> {
+fn value(dirty: bool) -> impl Strategy<Value = Value> {
     prop_oneof![
-        text().prop_map(Value::from),
+        some_text(dirty).prop_map(Value::from),
         any::<i64>().prop_map(Value::from),
         vec(
             prop_oneof![
-                text().prop_map(ListElem::from),
-                vec(text(), 2..4).prop_map(ListElem::from),
+                some_text(dirty).prop_map(ListElem::from),
+                vec(some_text(dirty), 2..4).prop_map(ListElem::from),
             ],
             2..4
         )
@@ -49,22 +66,22 @@ fn value() -> impl Strategy<Value = Value> {
     ]
 }
 
-/// Tags of the extra fields: not LEN, IDC nor 999, and no label ending in
-/// `999:` (quirk E3, `src/error.rs`).
-fn tags() -> impl Strategy<Value = Vec<u32>> {
-    btree_set(3u32..2_000, 0..6).prop_map(|tags| {
+/// Tags of the extra fields: not LEN, IDC nor 999, and, unless `dirty`, no
+/// label ending in `999:` (quirk E3, `src/error.rs`).
+fn tags(dirty: bool) -> impl Strategy<Value = Vec<u32>> {
+    btree_set(3u32..2_000, 0..6).prop_map(move |tags| {
         tags.into_iter()
-            .filter(|t| !t.to_string().ends_with("999"))
+            .filter(|&t| t != 999 && (dirty || !t.to_string().ends_with("999")))
             .collect()
     })
 }
 
-fn tagged() -> impl Strategy<Value = Record> {
+fn tagged_with(dirty: bool) -> impl Strategy<Value = Record> {
     (
         prop::sample::select(&TAGGED_TYPES[..]),
         0u32..1_000,
-        tags(),
-        vec(value(), 6),
+        tags(dirty),
+        vec(value(dirty), 6),
         prop::option::of(vec(any::<u8>(), 0..40)),
     )
         .prop_map(|(t, idc, tags, values, data)| {
@@ -91,18 +108,26 @@ fn binary() -> impl Strategy<Value = Record> {
 }
 
 fn message() -> impl Strategy<Value = Message> {
-    (text(), vec(prop_oneof![3 => tagged(), 1 => binary()], 0..6)).prop_map(|(tot, records)| {
-        let defaults = Defaults {
-            date: Some("20200101".into()),
-            tcn: Some("TCN".into()),
-        };
-        let mut msg = Message::with_defaults(&defaults);
-        msg.set_tot(tot).unwrap();
-        for r in records {
-            msg.push(r).unwrap();
-        }
-        msg
-    })
+    message_with(false)
+}
+
+fn message_with(dirty: bool) -> impl Strategy<Value = Message> {
+    (
+        some_text(dirty),
+        vec(prop_oneof![3 => tagged_with(dirty), 1 => binary()], 0..6),
+    )
+        .prop_map(|(tot, records)| {
+            let defaults = Defaults {
+                date: Some("20200101".into()),
+                tcn: Some("TCN".into()),
+            };
+            let mut msg = Message::with_defaults(&defaults);
+            msg.set_tot(tot).unwrap();
+            for r in records {
+                msg.push(r).unwrap();
+            }
+            msg
+        })
 }
 
 proptest! {
@@ -116,6 +141,19 @@ proptest! {
         let mut read = Message::parse(&bytes).unwrap();
         prop_assert_eq!(read.summary().unwrap(), summary);
         prop_assert_eq!(read.to_bytes().unwrap(), bytes);
+    }
+
+    /// With separators and `999:` in the values: refused, or written and read
+    /// back as written, never a file the reading refuses or reads otherwise.
+    #[test]
+    fn dirty_message_is_refused_or_read_back(mut msg in message_with(true)) {
+        if let Ok(bytes) = msg.to_bytes() {
+            let summary = msg.summary().unwrap();
+            let mut read = Message::parse(&bytes).unwrap();
+            prop_assert_eq!(read.summary().unwrap(), summary);
+            prop_assert_eq!(read.to_bytes().unwrap(), bytes.clone());
+            prop_assert_eq!(read.to_bytes_exact().unwrap(), bytes);
+        }
     }
 
     /// `to_bytes_exact(parse(b)) == b`, before and after `to_bytes`.

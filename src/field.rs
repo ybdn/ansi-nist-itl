@@ -1,11 +1,52 @@
 //! Text and binary fields of a tagged record.
 
-use crate::RS;
 use crate::bytes::Bytes;
-use crate::error::{Error, Position, Result};
+use crate::error::{Error, ErrorKind, Position, Result};
 use crate::py::{PrintfTemplate, encode_latin1, py_int};
 use crate::subfield::SubField;
 use crate::value::{Kind, ListElem, PyInt, Scalar, SubValue, Value};
+use crate::{FS, RS, US, alias};
+
+/// Refuses a separator (FS, GS, RS, US) in the bytes of a value: the reading
+/// would end the item, subfield, field or record there.
+pub(crate) fn no_separator(bytes: &[u8]) -> Result<()> {
+    match bytes.iter().find(|b| (FS..=US).contains(b)) {
+        Some(b) => Err(Error::new(
+            ErrorKind::Encoding,
+            format!("the separator byte 0x{b:02X} cannot be written in a value"),
+        )),
+        None => Ok(()),
+    }
+}
+
+/// The tag of the data field (`DATA`) of a record type, if it has one.
+fn data_tag(record: u32) -> Option<u32> {
+    alias::table(record).and_then(|t| alias::tag_of(t, alias::DATA))
+}
+
+/// Whether `tag` is the data field of its record type.
+fn is_data_field(record: u32, tag: &PyInt) -> bool {
+    data_tag(record).is_some_and(|t| tag.to_i64() == Some(i64::from(t)))
+}
+
+/// Refuses the label of the data field (`999:`) in the bytes of another field
+/// of a record type with data: the reading would take it for the start of
+/// the data.
+fn no_data_label(bytes: &[u8], record: u32, tag: &PyInt) -> Result<()> {
+    let Some(t) = data_tag(record).filter(|_| !is_data_field(record, tag)) else {
+        return Ok(());
+    };
+    let label = format!("{t}:");
+    if bytes.windows(label.len()).any(|w| w == label.as_bytes()) {
+        return Err(Error::new(
+            ErrorKind::Encoding,
+            format!(
+                "{label} cannot be written outside the data field: it would be read as its label"
+            ),
+        ));
+    }
+    Ok(())
+}
 
 /// Default tag format: `'%d.%03d:'`.
 pub(crate) const DEFAULT_FORMAT: &str = "%d.%03d:";
@@ -438,7 +479,9 @@ impl Field {
     ///
     /// Without subfields, the scalar value as `str(value)` (nothing for
     /// `None`); otherwise the subfields separated by RS. A character outside
-    /// Latin-1 gives an `Encoding` error.
+    /// Latin-1 gives an `Encoding` error, and so does a value that the
+    /// reading would cut: a separator (FS, GS, RS, US) in a value, or, in a
+    /// record type with data, its label (`999:`) in another field.
     ///
     /// ```
     /// use ansi_nist_itl::Field;
@@ -447,6 +490,9 @@ impl Field {
     /// assert_eq!(Field::new(2, 3, true)?.to_bytes()?, b"2.003:True");
     /// assert_eq!(Field::new(2, 1000, "x")?.to_bytes()?, b"2.1000:x");
     /// assert!(Field::new(2, 3, "€")?.to_bytes().is_err());
+    /// assert!(Field::new(2, 3, "a\u{1d}b")?.to_bytes().is_err());
+    /// assert!(Field::new(14, 20, "see 999:")?.to_bytes().is_err());
+    /// assert_eq!(Field::new(2, 20, "see 999:")?.to_bytes()?, b"2.020:see 999:");
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
@@ -456,20 +502,27 @@ impl Field {
 
     fn to_bytes_inner(&self) -> Result<Vec<u8>> {
         let label = self.label();
-        if self.subfields.is_empty() {
+        let out = if self.subfields.is_empty() {
+            // One byte per character in Latin-1.
+            let label_len = label.chars().count();
             let text = match &self.value {
                 Scalar::Null => label,
                 value => format!("{label}{value}"),
             };
-            return Ok(encode_latin1(&text)?);
-        }
-        let mut out = encode_latin1(&label)?;
-        for (i, sf) in self.subfields.iter().enumerate() {
-            if i > 0 {
-                out.push(RS);
+            let out = encode_latin1(&text)?;
+            no_separator(out.get(label_len..).unwrap_or_default())?;
+            out
+        } else {
+            let mut out = encode_latin1(&label)?;
+            for (i, sf) in self.subfields.iter().enumerate() {
+                if i > 0 {
+                    out.push(RS);
+                }
+                out.extend(sf.to_bytes()?);
             }
-            out.extend(sf.to_bytes()?);
-        }
+            out
+        };
+        no_data_label(&out, self.record, &self.tag)?;
         Ok(out)
     }
 
@@ -670,7 +723,18 @@ impl BinaryField {
         let mut out = encode_latin1(&label)
             .map_err(|e| Error::from(e).with_position(field_position(self.record, &self.tag)))?;
         out.extend_from_slice(&self.value);
+        self.check(&out)?;
         Ok(out)
+    }
+
+    /// Only the data field of a record type may hold any byte; the reading
+    /// would cut another binary field at a separator or at the data label.
+    fn check(&self, bytes: &[u8]) -> Result<()> {
+        let position = || field_position(self.record, &self.tag);
+        if !is_data_field(self.record, &self.tag) {
+            no_separator(&self.value).map_err(|e| e.with_position(position()))?;
+        }
+        no_data_label(bytes, self.record, &self.tag).map_err(|e| e.with_position(position()))
     }
 }
 
@@ -819,7 +883,10 @@ impl AnyField {
                 bytes.drain(..label.min(bytes.len()));
                 Ok(bytes)
             }
-            AnyField::Binary(f) => Ok(f.value().to_vec()),
+            AnyField::Binary(f) => {
+                f.to_bytes()?;
+                Ok(f.value().to_vec())
+            }
         }
     }
 }
