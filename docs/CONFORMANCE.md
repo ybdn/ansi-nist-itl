@@ -98,6 +98,8 @@ Both are `Message::validate_profile`. National profiles are not planned (PRD LIB
 7. **Not checked**: dependent conditions, value ranges and code lists, content of user-defined fields (§2).
 8. **Not supported**: XML/NIEM, Annex B.1.8 switch sequences, editions after Update 2015.
 9. **Portability**: CI runs on Linux; Windows has a manual job; macOS is not tested in CI (PRD QA-06).
+10. **Tag format width at most 1024** (`MAX_WIDTH`, `src/py/format.rs`): a `%[0][width]d` conversion wider than that, accepted before up to about 10^8 characters, is refused with `ErrorKind::BadFormat`.
+11. **Items nested at most 128 levels deep** (`MAX_ITEM_DEPTH`): a deeper list of items, given through the API or a deserialized form, is refused with `BAD_SUBFIELD_VALUE` instead of overflowing the stack. A file never nests items.
 
 ## 6. External evidence: public files
 
@@ -171,7 +173,7 @@ written by the crate. Procedure:
 | Evidence | What it shows | Replay |
 |----------|---------------|--------|
 | Property tests | Built message reads back; exact writing gives back the buffer; arbitrary and mutated bytes never panic; JSON round trip (512 cases each block) | `cargo test --all-features --test properties` |
-| Fuzzing | 4 `cargo-fuzz` targets (`parse`, `exact`, `parse_tolerant`, `encoding`): one minute each in CI, 5 to 10 minutes each weekly | `.github/workflows/ci.yml`, `scheduled.yml`; `cargo fuzz run parse` |
+| Fuzzing | 5 `cargo-fuzz` targets (`parse`, `exact`, `parse_tolerant`, `encoding`, `serde`): one minute each in CI, 5 to 10 minutes each weekly | `.github/workflows/ci.yml`, `scheduled.yml`; `cargo fuzz run parse` |
 | Versions | `0200`, `0300`, `0400`, `0500` read, rewritten and written exactly | `cargo test --test versions` |
 | Record types | §2 | `cargo test --all-features --test conformance` |
 | Real corpus | Corpus report on the maintainer's real files: **not run** for this statement (issue #82) | `ANSI_NIST_ITL_CORPUS` |
