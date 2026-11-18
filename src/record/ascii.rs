@@ -547,7 +547,8 @@ impl AsciiRecord {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn set(&mut self, name: &str, value: impl Into<Value>) -> Result<()> {
-        self.assign(name, Assigned::Text(value.into()))
+        let value = value.into().check_depth()?;
+        self.assign(name, Assigned::Text(value))
     }
 
     /// Sets a binary field by name, following the steps of

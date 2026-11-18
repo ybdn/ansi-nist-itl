@@ -431,6 +431,17 @@ impl Error {
         Error::nist(NistError::BadSubfieldValue, "Subfield cannot have items")
     }
 
+    /// BAD_SUBFIELD_VALUE: items nested deeper than [`crate::MAX_ITEM_DEPTH`].
+    pub(crate) fn items_too_deep() -> Self {
+        Error::nist(
+            NistError::BadSubfieldValue,
+            format!(
+                "Subfield items nested more than {} levels deep",
+                crate::MAX_ITEM_DEPTH
+            ),
+        )
+    }
+
     /// BAD_SUBFIELD_VALUE: subfield with items added to a field without `I`.
     pub(crate) fn subfield_of_cannot_have_items(label: &str) -> Self {
         Error::nist(

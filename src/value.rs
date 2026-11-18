@@ -296,6 +296,104 @@ impl fmt::Display for Item {
     }
 }
 
+/// Deepest nesting of [`Item::List`] that a subfield, a field or a record
+/// accepts: a value nested deeper is refused with `BAD_SUBFIELD_VALUE`.
+///
+/// A file never nests items (its items are scalars); nested lists only come
+/// from the API or a deserialized form. The operations on a value (`repr`,
+/// writing, `Clone`, `Drop`, comparison) recurse once per level: 128 levels
+/// stay far below the smallest thread stack, and match the recursion limit
+/// of `serde_json`, so no JSON form readable before is refused.
+///
+/// The variants of [`Item`] are public: a value built directly with them can
+/// be deeper, and its own operations can then overflow the stack before it
+/// reaches the crate.
+///
+/// ```
+/// use ansi_nist_itl::{Item, SubField, MAX_ITEM_DEPTH};
+///
+/// let mut item = Item::from("x");
+/// for _ in 0..MAX_ITEM_DEPTH {
+///     item = Item::List(vec![item]);
+/// }
+/// assert!(SubField::new(vec![item.clone()], "SI").is_ok());
+/// let err = SubField::new(vec![Item::List(vec![item])], "SI").unwrap_err();
+/// assert_eq!(
+///     err.to_string(),
+///     "BAD_SUBFIELD_VALUE: Subfield items nested more than 128 levels deep"
+/// );
+/// ```
+pub const MAX_ITEM_DEPTH: usize = 128;
+
+/// Whether an item under `roots` nests lists more than [`MAX_ITEM_DEPTH`]
+/// levels deep. Iterative, so that a deeper value is checked without
+/// recursion.
+fn too_deep<'a>(roots: impl IntoIterator<Item = &'a Item>) -> bool {
+    let mut stack: Vec<(&Item, usize)> = roots.into_iter().map(|i| (i, 0)).collect();
+    while let Some((item, depth)) = stack.pop() {
+        if let Item::List(list) = item {
+            if depth >= MAX_ITEM_DEPTH {
+                return true;
+            }
+            stack.extend(list.iter().map(|i| (i, depth + 1)));
+        }
+    }
+    false
+}
+
+/// Drops `items` level by level: the derived `Drop` recurses once per level
+/// and would overflow the stack on a value too deep.
+fn drop_flat(items: impl IntoIterator<Item = Item>) {
+    let mut rest: Vec<Item> = items.into_iter().collect();
+    while let Some(item) = rest.pop() {
+        if let Item::List(list) = item {
+            rest.extend(list);
+        }
+    }
+}
+
+/// `items`, unchanged, if none is nested deeper than [`MAX_ITEM_DEPTH`].
+pub(crate) fn check_depth(items: Vec<Item>) -> crate::Result<Vec<Item>> {
+    if too_deep(&items) {
+        drop_flat(items);
+        return Err(crate::Error::items_too_deep());
+    }
+    Ok(items)
+}
+
+impl SubValue {
+    /// `self`, unchanged, if no item is nested deeper than [`MAX_ITEM_DEPTH`].
+    pub(crate) fn check_depth(self) -> crate::Result<Self> {
+        match self {
+            SubValue::Items(items) => check_depth(items).map(SubValue::Items),
+            scalar => Ok(scalar),
+        }
+    }
+}
+
+impl Value {
+    /// `self`, unchanged, if no item is nested deeper than [`MAX_ITEM_DEPTH`].
+    pub(crate) fn check_depth(self) -> crate::Result<Self> {
+        let Value::List(elems) = self else {
+            return Ok(self);
+        };
+        fn lists(e: &ListElem) -> &[Item] {
+            match e {
+                ListElem::List(items) => items,
+                ListElem::Scalar(_) => &[],
+            }
+        }
+        if too_deep(elems.iter().flat_map(lists)) {
+            drop_flat(elems.into_iter().flat_map(|e| match e {
+                ListElem::List(items) => items,
+                ListElem::Scalar(_) => Vec::new(),
+            }));
+            return Err(crate::Error::items_too_deep());
+        }
+        Ok(Value::List(elems))
+    }
+}
+
 /// Value of a subfield: a scalar, or a list of items.
 ///
 /// ```
