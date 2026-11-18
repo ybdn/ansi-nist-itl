@@ -2,7 +2,7 @@
 //! the report on a corpus kept out of the repository.
 //!
 //! The corpus report is skipped unless `ANSI_NIST_ITL_CORPUS` names a file or
-//! directory, as in `tests/oracle.rs`:
+//! directory:
 //!
 //! ```text
 //! ANSI_NIST_ITL_CORPUS=/path/to/corpus cargo test --release --all-features --test conformance -- --nocapture
@@ -11,16 +11,30 @@
 #![cfg(feature = "validation")]
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ansi_nist_itl::validation::{Level, Profile};
 use ansi_nist_itl::{
     AsciiRecord, BinaryRecord, Defaults, DiagnosticCode, Field, Message, ParseOptions, Record,
 };
 
-#[path = "../examples/oracle_dump.rs"]
-#[allow(dead_code)]
-mod oracle_dump;
+/// The files under `path`, sorted, directories after files.
+fn list_files(path: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
+    if !path.is_dir() {
+        out.push(path.to_path_buf());
+        return Ok(());
+    }
+    let mut entries: Vec<PathBuf> = std::fs::read_dir(path)?
+        .map(|e| e.map(|e| e.path()))
+        .collect::<std::io::Result<_>>()?;
+    entries.sort();
+    let (dirs, plain): (Vec<_>, Vec<_>) = entries.into_iter().partition(|p| p.is_dir());
+    out.extend(plain);
+    for dir in dirs {
+        list_files(&dir, out)?;
+    }
+    Ok(())
+}
 
 /// A version 0502 message holding one record of type `t`, written by the
 /// crate; `None` when the crate refuses to build a record of that type.
@@ -48,8 +62,7 @@ fn message_with(t: u32) -> Option<Vec<u8>> {
 }
 
 /// Types 1 to 22, 98 and 99 are written, read in both modes and written
-/// back exactly; the crate refuses to build Types 23 to 97, as the
-/// reference implementation does.
+/// back exactly; the crate refuses to build Types 23 to 97.
 #[test]
 fn every_record_type() {
     for t in 2..=99 {
@@ -101,7 +114,7 @@ fn corpus_report() {
         return;
     };
     let mut files = Vec::new();
-    oracle_dump::files(Path::new(&corpus), &mut files).expect("readable corpus");
+    list_files(Path::new(&corpus), &mut files).expect("readable corpus");
     let mut totals: BTreeMap<&str, usize> = BTreeMap::new();
     let mut not_exact = Vec::new();
     for path in &files {

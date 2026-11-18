@@ -13,7 +13,6 @@ checked is marked **not verified**.
 | Versions read and written, without tables | Any 1.002, in particular `0200`, `0300`, `0400` (and `0201` in the public files of §6) | `tests/versions.rs`; §6 |
 | Encoding | Traditional encoding only (tagged and binary records, separators FS, GS, RS, US) | `src/message/` |
 | Not supported | XML / NIEM encoding (PRD LIB-22); editions after Update 2015, including ANSI/NIST-ITL 1-2025 | `docs/PRD.md` §4.2, §9 |
-| Compatibility baseline | Same parsing, errors, `to_bytes` output and summary as `nistitl` 0.6 (IDEMIA) | `tests/oracle.rs`, `tests/reference_doctests.rs`, `tests/reference_edge_cases.rs` |
 
 The parser never reads 1.002: every version is read and written the same way,
 and no rule of the parser depends on the version (crate documentation,
@@ -28,9 +27,9 @@ edition can get a finding; see §5.
 
 Columns:
 
-- **Read**: `Message::parse` (strict mode, the behaviour of `nistitl`).
+- **Read**: `Message::parse` (strict mode: the first error stops the reading).
 - **Tolerant**: `Message::parse_with(.., ParseOptions::tolerant())`.
-- **Write**: `Message::to_bytes` (recomputes LEN and CNT, sorts fields as `nistitl` does).
+- **Write**: `Message::to_bytes` (recomputes LEN and CNT, writes fields in tag order).
 - **Exact**: `Message::to_bytes_exact` gives back the bytes read.
 - **Validated**: what `Message::validate` checks for the record.
 
@@ -42,13 +41,13 @@ Columns:
 | 4, 7, 8 | binary | yes | yes | yes | yes | record type only; header values not checked |
 | 9 to 22 | tagged | yes | yes | yes | yes | dictionary |
 | 98, 99 | tagged | yes | yes | yes | yes | dictionary |
-| 23 to 97 | — | refused (as `nistitl`) | read, with an `UnknownRecordType` diagnostic | refused | — | error `RecordType` |
+| 23 to 97 | — | refused | read, with an `UnknownRecordType` diagnostic | refused | — | error `RecordType` |
 
 Evidence: `tests/conformance.rs::every_record_type` builds a version `0502`
 message for each type 2 to 99, then checks the strict and tolerant reading, the
 exact writing and the validation; `undefined_record_type` checks a Type-50.
-Binary records: only LEN and IDC are read, the rest is the raw value, as in
-`nistitl` (`src/record/binary.rs`); the image header is decoded on request
+Binary records: only LEN and IDC are read, the rest is the raw value
+(`src/record/binary.rs`); the image header is decoded on request
 (`BinaryRecord::image_header`, Types 3 to 6; `signature_header`, Type-8).
 
 ### Validation levels
@@ -73,7 +72,7 @@ Evidence: `tests/validation.rs`, `tests/dictionary.rs`, unit tests in
 
 | Item | Statement | Evidence |
 |------|-----------|----------|
-| Default reading | Every byte is one character (Latin-1 view), as `nistitl` | `src/encoding.rs` module documentation |
+| Default reading | Every byte is one character (Latin-1 view) | `src/encoding.rs` module documentation |
 | Declared sets | CSI 0 (ASCII), 1 (Latin-1), 2 (UTF-16), 3 (UTF-8), 4 (UTF-32) decoded and encoded on request (`decode`, `encode`, `get_decoded`, `set_encoded`); 128 to 999 recognised as user-defined, not decoded; 5 to 127 and above 999 refused | `tests/encoding.rs::declared_encodings`, `errors` |
 | UTF-16 / UTF-32 | Read with a byte order mark if present, big-endian otherwise; written big-endian without BOM; a character whose encoding holds a byte `0x1C` to `0x1F` is refused | `tests/encoding.rs::utf16_and_utf32_*` |
 | Annex B.1.8 (`STX` … `ETX`) | **Not supported**: text holding `STX` is refused (PRD LIB-18) | `tests/encoding.rs::errors` |
@@ -94,7 +93,7 @@ Both are `Message::validate_profile`. National profiles are not planned (PRD LIB
 2. **10.011 CGA is typed `A`** (3 to 5 characters) in the dictionary, which refuses `JP2` and `JP2L`, compression codes of Table 15; the CGA of the other image types is `AN`. Whether SP 500-290e3 says `A` for Type-10: **not verified**. Not filed yet (see the pull request of this document).
 3. **Versions `0500` and `0501` use the Update 2015 tables.** On the public files of §6, 21.005 (`ACD`, a date in a `0500` file, a date and time in the 2015 table) and item sizes of 10.049, 11.012, 11.035, 11.037 and 12.011 (`0501` files) are reported. Whether these are edition differences or defects: **not verified**.
 4. **Field numbers above 999.** BioCTS gives `pass-type-1-long-fieldnumber.an2` (field 2.999999999) as conformant; the validation reports `UndefinedField`. Whether the 2015 tables allow it: **not verified**.
-5. **Fields after the data field (999)** are read as part of the data, as `nistitl` does (quirk E5); the tolerant mode reports a `DataNotLast` warning (`src/error.rs`). Five NBIS files of §6 have this layout.
+5. **Fields after the data field (999)** are read as part of the data; the tolerant mode reports a `DataNotLast` warning (`src/error.rs`). Five NBIS files of §6 have this layout.
 6. **Binary records (Types 3 to 8)**: header values (IMP, FGP, ISR, HLL, VLL, GCA) are not validated (§2).
 7. **Not checked**: dependent conditions, value ranges and code lists, content of user-defined fields (§2).
 8. **Not supported**: XML/NIEM, Annex B.1.8 switch sequences, editions after Update 2015.
@@ -104,8 +103,7 @@ Both are `Message::validate_profile`. National profiles are not planned (PRD LIB
 
 Downloaded on 2026-11-18 from official NIST hosts, outside the repository
 (never committed, `SECURITY.md`), then run through
-`tests/conformance.rs::corpus_report` and `tests/oracle.rs` with
-`ANSI_NIST_ITL_CORPUS`.
+`tests/conformance.rs::corpus_report` with `ANSI_NIST_ITL_CORPUS`.
 
 | Source | Page | Archive | Files |
 |--------|------|---------|-------|
@@ -126,7 +124,6 @@ see below); NBIS 1 × `0200`, 17 × `0201`, 3 × `0400`.
 | Strict reading | 105 accepted, 3 refused | 21 accepted |
 | Tolerant reading | 108 read; 1 diagnostic on each refused file, none on the others | 21 read; `DataNotLast` warnings on 5 files (§5, item 5) |
 | Exact rewrite, byte for byte | 105 of 105 | 21 of 21 |
-| Same JSON as `nistitl` 0.6 (`tests/oracle.rs`) | 108 of 108 | 21 of 21 |
 | `validate()` without error | 65 of 105 | 21 of 21 (no tables for these versions: CNT only) |
 | EBTS 11.2 / INT-I 5.03 without error | 0 / 0 (none is an EBTS or INT-I transaction) | 0 / 0 |
 
@@ -152,8 +149,6 @@ On the 105 files read:
 ```sh
 # Corpus: a directory of the extracted .an2 files, outside the repository.
 ANSI_NIST_ITL_CORPUS=/path/to/an2 cargo test --release --all-features --test conformance -- --nocapture
-# Oracle: CPython 3.12.16 with nistitl 0.6, see tools/oracle/README.md.
-ANSI_NIST_ITL_CORPUS=/path/to/an2 ANSI_NIST_ITL_PYTHON=/path/to/python cargo test --release --test oracle
 ```
 
 `corpus_report` prints one line per file and the totals, and fails if a file
@@ -175,10 +170,8 @@ written by the crate. Procedure:
 
 | Evidence | What it shows | Replay |
 |----------|---------------|--------|
-| Oracle bench, synthetic | Same JSON as `nistitl` 0.6 and exact rewrite on 20 000 messages built by `nistitl` then mutated; seed = CI run number | `tools/oracle/README.md`; CI job `oracle` (`.github/workflows/ci.yml`) |
-| Ported reference tests | 34 tests from `nistitl` docstrings, 118 edge cases | `cargo test --test reference_doctests --test reference_edge_cases` |
 | Property tests | Built message reads back; exact writing gives back the buffer; arbitrary and mutated bytes never panic; JSON round trip (512 cases each block) | `cargo test --all-features --test properties` |
 | Fuzzing | 4 `cargo-fuzz` targets (`parse`, `exact`, `parse_tolerant`, `encoding`): one minute each in CI, 5 to 10 minutes each weekly | `.github/workflows/ci.yml`, `scheduled.yml`; `cargo fuzz run parse` |
 | Versions | `0200`, `0300`, `0400`, `0500` read, rewritten and written exactly | `cargo test --test versions` |
 | Record types | §2 | `cargo test --all-features --test conformance` |
-| Real corpus | Oracle on the maintainer's real files: **not run** for this statement (issue #82) | `ANSI_NIST_ITL_CORPUS` |
+| Real corpus | Corpus report on the maintainer's real files: **not run** for this statement (issue #82) | `ANSI_NIST_ITL_CORPUS` |
