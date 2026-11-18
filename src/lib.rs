@@ -248,7 +248,7 @@ pub use message::{Message, ParseOptions, Parsed, RecordVisitor, parse_record};
 pub use record::{AsciiRecord, BinaryRecord, FieldKey, ImageHeader, Record, SignatureHeader};
 pub use structfmt::StructValue;
 pub use subfield::SubField;
-pub use value::{Item, Kind, ListElem, PyInt, Scalar, SubValue, Value};
+pub use value::{Item, Kind, ListElem, MAX_ITEM_DEPTH, PyInt, Scalar, SubValue, Value};
 
 // The Rust examples of the README compile (they need the `validation`
 // feature).

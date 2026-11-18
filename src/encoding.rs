@@ -433,7 +433,7 @@ impl AsciiRecord {
         value: impl Into<Value>,
         encoding: CharacterEncoding,
     ) -> Result<()> {
-        let value = map_texts(value.into(), &|t| encode(t, encoding))?;
+        let value = map_texts(value.into().check_depth()?, &|t| encode(t, encoding))?;
         self.set(name, value)
     }
 }

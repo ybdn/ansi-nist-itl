@@ -526,7 +526,7 @@ impl Message {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn set_tot(&mut self, value: impl Into<Value>) -> Result<()> {
-        let value = value.into();
+        let value = value.into().check_depth()?;
         self.first_ascii_mut(alias::TOT)?.set(alias::TOT, value)
     }
 

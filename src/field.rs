@@ -118,6 +118,7 @@ impl Field {
         format: &str,
         alias: impl Into<String>,
     ) -> Result<Self> {
+        let value = value.into().check_depth()?;
         let tag = tag_number(tag.into(), record)?;
         let format = tag_format(format, record, &tag)?;
         let mut field = Field {
@@ -177,7 +178,11 @@ impl Field {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn set_value(&mut self, value: impl Into<Value>) -> Result<()> {
-        self.set_value_inner(value.into())
+        let value = value
+            .into()
+            .check_depth()
+            .map_err(|e| e.with_position(self.position()))?;
+        self.set_value_inner(value)
             .map_err(|e| e.with_position(self.position()))
     }
 

@@ -3,7 +3,7 @@
 use crate::US;
 use crate::error::{Error, Result};
 use crate::py::encode_latin1;
-use crate::value::{Item, Kind, Scalar, SubValue};
+use crate::value::{Item, Kind, Scalar, SubValue, check_depth};
 
 /// Subfield of a [`Field`](crate::Field): a scalar value, or a list of items
 /// separated by US (`0x1F`) when written.
@@ -89,9 +89,10 @@ impl SubField {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn set_value(&mut self, value: impl Into<SubValue>) -> Result<()> {
+        let value = value.into().check_depth()?;
         self.value = Scalar::default();
         self.values.clear();
-        match value.into() {
+        match value {
             SubValue::Scalar(v) => {
                 if v.is_truthy() && !self.kind.subfields() {
                     return Err(Error::subfield_cannot_have_value());
@@ -130,7 +131,8 @@ impl SubField {
         if items.peek().is_some() && !self.kind.items() {
             return Err(Error::subfield_cannot_have_items());
         }
-        self.values.extend(items.map(Into::into));
+        let items = check_depth(items.map(Into::into).collect())?;
+        self.values.extend(items);
         Ok(())
     }
 
