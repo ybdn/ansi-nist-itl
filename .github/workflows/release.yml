@@ -1,8 +1,8 @@
 name: Release
 
 # Publishes to crates.io through Trusted Publishing (OIDC, no stored token) when a `v*` tag
-# is pushed on `main`. A manual run does every check and `cargo publish --dry-run`, and
-# never publishes: publishing is irreversible and only a tag on main may do it.
+# is pushed on `prod`. A manual run does every check and `cargo publish --dry-run`, and
+# never publishes: publishing is irreversible and only a tag on prod may do it.
 # Prerequisite: the trusted publisher (this repository, this workflow) declared on crates.io.
 # Safe to re-run: a version already on crates.io is not published again, and an existing
 # GitHub release is kept.
@@ -42,8 +42,8 @@ jobs:
               echo "::error::tag $REF_NAME does not match version $version in Cargo.toml"
               exit 1
             fi
-            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-              echo "::error::tag $REF_NAME is not on main"
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/prod; then
+              echo "::error::tag $REF_NAME is not on prod"
               exit 1
             fi
           fi

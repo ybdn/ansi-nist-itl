@@ -20,8 +20,8 @@ taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Workflow
 
-- Branch from `develop` and open the pull request against `develop`; `main` only receives
-  releases.
+- Branch from `develop` and open the pull request against `develop`; `prod` only receives
+  releases, promoted through `preprod`.
 - One topic per pull request; reference the issue it closes.
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
   (`feat(record): …`, `fix: …`, `docs: …`).
@@ -29,7 +29,7 @@ taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 ## Checks
 
 The CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every pull request
-against `develop` or `main` (and on a push to `main`, which only receives releases). A job
+against `develop`, `preprod` or `prod` (and on a push to `prod`, which only receives releases). A job
 is skipped when the pull request does not touch its files; the `ci` job is the single status
 to require. Before pushing, run what the shared Rust workflow checks:
 
