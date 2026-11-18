@@ -8,8 +8,12 @@
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](src/lib.rs)
 
 A Rust library to read, write and validate ANSI/NIST-ITL biometric transaction files: the
-`.nist`, `.eft`, `.an2` and `.int` files exchanged by law enforcement, border and identity
-systems, and specified for the FBI by EBTS and for INTERPOL by INT-I.
+`.nist`, `.eft` and `.an2` files exchanged by law enforcement, border and identity systems, as
+profiled by the FBI (EBTS) and INTERPOL (INT-I).
+
+What it does not do: it validates against the tables of the standard and of two profiles, which
+is not a certification by NIST, the FBI or INTERPOL; it does not read or write the XML (NIEM)
+encoding; it does not decode images (WSQ, JPEG 2000).
 
 It is meant for developers of AFIS, border-control, forensic or identity software who need to
 read, inspect, convert, write or check these files from Rust.
@@ -28,14 +32,14 @@ read, inspect, convert, write or check these files from Rust.
 
 ## Documentation
 
-- [User guide](https://github.com/ybdn/ansi-nist-itl/blob/develop/docs/GUIDE.md): one section
+- [User guide](https://github.com/ybdn/ansi-nist-itl/blob/main/docs/GUIDE.md): one section
   per task, with examples run by the test suite.
 - [API documentation](https://docs.rs/ansi-nist-itl) on docs.rs.
-- [Conformance statement](https://github.com/ybdn/ansi-nist-itl/blob/develop/docs/CONFORMANCE.md):
+- [Conformance statement](https://github.com/ybdn/ansi-nist-itl/blob/main/docs/CONFORMANCE.md):
   what is read, written and validated, known deviations, and results on public NIST sample files.
-- [Architecture](https://github.com/ybdn/ansi-nist-itl/blob/develop/docs/ARCHITECTURE.md): modules,
+- [Architecture](https://github.com/ybdn/ansi-nist-itl/blob/main/docs/ARCHITECTURE.md): modules,
   invariants, tests, fuzzing, CI and releases, for contributors.
-- [Requirements](https://github.com/ybdn/ansi-nist-itl/blob/develop/docs/PRD.md) and their status.
+- [Requirements](https://github.com/ybdn/ansi-nist-itl/blob/main/docs/PRD.md) and their status.
 - [Security policy](SECURITY.md), [contributing](CONTRIBUTING.md), [changelog](CHANGELOG.md).
 
 ## Quick start
@@ -113,11 +117,13 @@ cargo run --example inspect --features validation -- transaction.eft ebts
 ## Scope
 
 - **Records**: tagged (Types 1, 2, 9 to 22, 98, 99) and binary (Types 3 to 8, with typed
-  headers for Types 3 to 6 and 8). Binary data are views on the buffer read, not copies.
+  headers for Types 3 to 6 and 8). `Message::parse` copies its input once into a shared buffer;
+  binary data are views on that buffer.
 - **Encoding**: the traditional encoding (tagged and binary records, separators FS, GS, RS, US).
-- **Versions**: every version in field 1.002 is read and written the same way, the traditional
-  `0200` to `0400` included. The tables of the dictionary and of the validation are those of
-  ANSI/NIST-ITL 1-2011 Update 2015 (NIST SP 500-290e3), used for versions `0500` to `0502`.
+- **Versions**: every value of field 1.002 is read and written the same way; the tests cover
+  `0200`, `0300`, `0400` and `0500` (`tests/versions.rs`) and `0502` (`tests/conformance.rs`).
+  The tables of the dictionary and of the validation are those of ANSI/NIST-ITL 1-2011 Update
+  2015 (NIST SP 500-290e3), used for versions `0500` to `0502`.
 - **Profiles**: FBI CJIS EBTS 11.2 (tables generated from the specification) and INTERPOL INT-I
   5.03.
 
@@ -137,12 +143,11 @@ cargo run --example inspect --features validation -- transaction.eft ebts
   (module `encoding`). The switch sequences of Annex B.1.8 (`STX` … `ETX`) are not supported:
   text holding `STX` is refused, except in UTF-16 and UTF-32.
 - The XML (NIEM) encoding of ANSI/NIST-ITL is not supported; it is considered for a 2.x.
-- The tables follow ANSI/NIST-ITL 1-2011 Update 2015; later editions, ANSI/NIST-ITL 1-2025
-  included, are not covered. Version `0500` and `0501` files are validated with the Update 2015
+- The tables follow ANSI/NIST-ITL 1-2011 Update 2015; later editions are not covered. Version `0500` and `0501` files are validated with the Update 2015
   tables.
 - The validation does not check the dependent conditions of the tables, value ranges, code
   lists, the content of user-defined fields, nor the header values of binary records
-  ([conformance statement](https://github.com/ybdn/ansi-nist-itl/blob/develop/docs/CONFORMANCE.md),
+  ([conformance statement](https://github.com/ybdn/ansi-nist-itl/blob/main/docs/CONFORMANCE.md),
   §2 and §5).
 - Only the FBI EBTS 11.2 and INTERPOL INT-I 5.03 profiles are bundled; national profiles are not
   planned.
@@ -151,15 +156,17 @@ cargo run --example inspect --features validation -- transaction.eft ebts
 
 ## Guarantees
 
-- **No panic on input.** No file makes `ansi-nist-itl` panic: any bytes given to the parser, in
-  strict, tolerant or exact mode, give a message or an `Error`. Values given to the public API,
-  directly or through `serde`, give a result or an `Error` within the documented limits (tag
-  format width at most 1024, items nested at most `MAX_ITEM_DEPTH` = 128 levels); a value built
-  directly from the public `Item` variants deeper than that can overflow the stack in its own
-  operations. Not covered: a failed memory allocation, which aborts the process as in any Rust
-  program, and 32-bit targets, which are not tested. Clippy denies `unwrap`, `expect`, `panic!`
-  and unchecked indexing in the library, `unsafe` is forbidden, and five `cargo-fuzz` targets
-  (parsing, exact writing, tolerant mode, encodings, `serde`) run in CI.
+- **No panic on input.** The crate is designed not to panic on any input within the documented
+  bounds: any bytes given to the parser, in strict, tolerant or exact mode, are meant to give a
+  message or an `Error`, and values given to the public API, directly or through `serde`, a
+  result or an `Error`, within the documented limits (tag format width at most 1024, items nested
+  at most `MAX_ITEM_DEPTH` = 128 levels). This is checked by fuzzing and lints, not formally
+  proven. Clippy denies `unwrap`, `expect`, `panic!` and unchecked indexing in the library,
+  `unsafe` is forbidden, and five `cargo-fuzz` targets (parsing, exact writing, tolerant mode,
+  encodings, `serde`) run in CI. Not covered: a value built directly from the public `Item`
+  variants deeper than the limit, which can overflow the stack in its own operations; a failed
+  memory allocation, which aborts the process as in any Rust program; 32-bit targets, which are
+  not tested.
 - **Exact rewrite.** `to_bytes_exact` gives back the bytes read for every record that did not
   change. On the public NIST sample files of the conformance statement (BioCTS and NBIS, 126
   files accepted by the strict mode), every file accepted is written back byte for byte.
@@ -167,15 +174,17 @@ cargo run --example inspect --features validation -- transaction.eft ebts
   offset, when known. Error messages are stable from run to run.
 - **Portability.** Pure Rust; the core works on byte slices and needs no I/O. The test suite runs
   in CI on Linux and macOS, and on the MSRV (Rust 1.86). A manual job runs it on Windows: on
-  2026-11-11 ([run 43106411965](https://github.com/ybdn/ansi-nist-itl/actions/runs/43106411965)),
-  1155 tests passed, 0 failed, 3 ignored.
+  2026-11-18, on `develop` at commit `2f032cc`
+  ([run 44270843043](https://github.com/ybdn/ansi-nist-itl/actions/runs/44270843043), job
+  `test-windows`), `cargo test --all-targets` and `--doc`, with default features and with
+  `--all-features`, gave 1104 tests passed, 0 failed, 3 ignored.
 - **Data protection.** Biometric files are personal data. The repository holds synthetic test
-  data only, and a CI job refuses NIST files outside an allowlist.
+  data only, and a CI job, run on every pull request, refuses NIST files outside an allowlist.
 
 ## Decoding a WSQ image
 
-This crate reads records; it does not decode images. Field 999 of a Type-14 holds a WSQ stream:
-to decode it, the application adds its own dependency on
+This crate reads records; it does not decode images. When field 14.011 (CGA) of a Type-14 is
+`WSQ20`, its field 999 holds a WSQ stream: to decode it, the application adds its own dependency on
 [`wsq-codec`](https://crates.io/crates/wsq-codec), which is not a dependency of this crate.
 
 ```rust,ignore
@@ -196,8 +205,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Performance
 
-Reading, the exact rewrite and deserialization take a time linear in the number of fields and
-records. No throughput figure is published; measure on your own files:
+Reading, the exact rewrite and deserialization are not quadratic in the number of fields and
+records: tests compare the time on an input with the time on an input 16 times larger
+(`tests/robustness.rs`, `tests/serde.rs`). No throughput figure is published; measure on your own
+files:
 
 ```sh
 cargo run --release --example speed -- <file or directory>

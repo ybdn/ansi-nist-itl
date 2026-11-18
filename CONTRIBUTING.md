@@ -33,7 +33,7 @@ cargo test --all-features
 ```
 
 The crate has four features (`local-date` on by default, `dictionary`, `validation`, `serde`);
-test with default features and with `--all-features`, as the CI does. How the code is organised,
+test with default features and with `--all-features`, as the CI does. How the code is organized,
 the invariants it keeps (exact rewrite, no panic on input) and how they are tested are described
 in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -115,5 +115,5 @@ field to the dictionary or a validation profile.
 
 ## License
 
-By contributing, you agree that your contributions are licensed under the MIT license of
+By contributing, you agree that your contributions are licensed under the MIT licence of
 the project ([LICENSE](LICENSE)).

@@ -1,6 +1,6 @@
 # Architecture of `ansi-nist-itl`
 
-This document describes how the crate is organised, what it guarantees and
+This document describes how the crate is organized, what it guarantees and
 how those guarantees are checked, and how to extend or release it. It is
 written for maintainers and for contributors. Every statement names the file,
 function or test that supports it; if one of them no longer matches the code,
@@ -45,7 +45,7 @@ reachable by path; its public types are re-exported from the crate root.
 | `value` | private; types re-exported | `Value`, `Scalar`, `SubValue`, `ListElem`, `Item`, `Kind`, `PyInt` (arbitrary precision), `MAX_ITEM_DEPTH`. |
 | `message/` | private; `Message`, `ParseOptions`, `Parsed`, `RecordVisitor`, `parse_record` re-exported | See below. |
 | `record/` | private; `Record`, `AsciiRecord`, `BinaryRecord`, `ImageHeader`, `SignatureHeader`, `FieldKey` re-exported | See below. |
-| `image` | public | Image metadata (dimensions, resolution, compression, IMP, FGP) read from fields 6 to 13 or from the binary header. No image decoding. |
+| `image` | public | Image metadata (dimensions, resolution, compression, IMP, FGP) read from fields 3 (IMP) and 6 to 13 of tagged image records, or from the binary header. No image decoding. |
 | `alias/` | public | Alias constants (`IDC`, `DATA`, ...). `table.rs`: aliases by record type; `names.rs`: one constant per distinct alias. |
 | `structfmt` | private; `StructValue` re-exported | Pack/unpack language used by binary records (`BinaryRecord::pack`, `unpack`). Checked by `tests/data/struct_vectors.tsv`. |
 | `py/` | private | See "The `py` module" below. |
@@ -76,8 +76,7 @@ reachable by path; its public types are re-exported from the crate root.
 `src/py/` is private. The public model uses Python-like values (`Value`,
 `Scalar`, `PyInt`; `src/lib.rs`, "Model"): a tag is formatted with a `%`
 format, values are written with `str()`, error texts use `repr()`, numbers are
-read like `int()`. `py/` reproduces those rules of CPython 3.12 so that
-output and error messages are stable:
+read like `int()`. `py/` implements those rules as CPython 3.12 defines them:
 
 | File | Content |
 |------|---------|
@@ -167,7 +166,7 @@ type and IDC of each record as the CNT describes them (`layout_now`).
    (label and content as read); a changed field keeps its label as read and
    gets its new content; a new field is written normally; LEN is recomputed
    by the same fixed point as `to_bytes`. The lookups by tag use `HashMap`s
-   built once per record (to stay linear); they do not influence the order.
+   built once per record (to avoid quadratic time); they do not influence the order.
 4. When every record was read and the layout holds, the pieces are ordered by
    their offset in the original buffer, so a record merged from two Type-1
    records is written at the place of its first bytes; `trailing` is appended.
@@ -195,11 +194,11 @@ strict-mode error and its recovery.
 
 | Invariant | Mechanism | Evidence |
 |-----------|-----------|----------|
-| A buffer accepted by `parse` is given back by `to_bytes_exact`, before and after `to_bytes` | Origin kept per record and per field (section 2) | `tests/properties.rs`: `exact_writing_gives_back_the_buffer`, `any_bytes`, `mutated_message`; `tests/conformance.rs` (every record type, and the corpus report when `ANSI_NIST_ITL_CORPUS` is set); fuzz target `exact`; `tests/versions.rs` |
+| A buffer accepted by `parse` is given back by `to_bytes_exact`, before and after `to_bytes`. Known limit: a value set through the API that holds a separator byte (`0x1C` to `0x1F`) or the data label `999:` is written as is, and the result may not read back; the invariant covers buffers read, and values without these bytes | Origin kept per record and per field (section 2) | `tests/properties.rs`: `exact_writing_gives_back_the_buffer`, `any_bytes`, `mutated_message`; `tests/conformance.rs` (every record type, and the corpus report when `ANSI_NIST_ITL_CORPUS` is set); fuzz target `exact`; `tests/versions.rs` |
 | `to_bytes` then `parse` gives the same summary and the same bytes | Same writer for both | `tests/properties.rs`: `written_message_reads_back` |
 | No panic on input | Lint policy, no `unsafe`, bounded recursion and width | below |
 | Same input, same output and same error messages | No clock or randomness in parsing or writing; `Defaults` fixes what a new Type-1 draws from the clock | `src/lib.rs` ("Behaviour"), `src/defaults.rs` |
-| Reading is linear in the number of fields and records | Per-record index of fields by tag and alias, built once | `tests/robustness.rs` |
+| Reading is not quadratic in the number of fields and records | Per-record index of fields by tag and alias, built once | `tests/robustness.rs`, `tests/serde.rs` (ratio tests, below) |
 
 ### Exact rewrite
 
@@ -221,19 +220,20 @@ What the documentation says, in order of authority:
 - `docs/CONFORMANCE.md` section 5, items 10 and 11 give the two bounds on the
   API: a tag format `%[0][width]d` is refused above width 1024
   (`ErrorKind::BadFormat`), and items nested deeper than `MAX_ITEM_DEPTH`
-  (128) are refused with `BAD_SUBFIELD_VALUE`. `CHANGELOG.md` [Unreleased],
-  "Fixed", gives the two defects those bounds fixed (abort or capacity
+  (128) are refused with `BAD_SUBFIELD_VALUE`. The `CHANGELOG.md` entry that
+  introduces `MAX_ITEM_DEPTH` and the width limit gives the two defects those bounds fixed (abort or capacity
   overflow on a huge width; stack overflow on about 10 000 nested lists).
 
-The guarantee, as the README states it: no file makes the crate panic; any
-bytes given to the parser, in strict, tolerant or exact mode, give a message
-or an `Error`. Values given to the public API, directly or through `serde`,
-give a result or an `Error` within the documented limits (tag format width at
-most 1024, items nested at most `MAX_ITEM_DEPTH` = 128 levels); a value built
-directly from the public `Item` variants deeper than that can overflow the
-stack in its own operations. Not covered: a failed memory allocation, which
-aborts the process, and 32-bit targets, which are not tested. The guarantee
-rests on the mechanisms below; it is not a formal proof.
+The guarantee, as the README states it: the crate is designed not to panic on
+any input within the documented bounds. Any bytes given to the parser, in
+strict, tolerant or exact mode, are meant to give a message or an `Error`;
+values given to the public API, directly or through `serde`, a result or an
+`Error`, within the documented limits (tag format width at most 1024, items
+nested at most `MAX_ITEM_DEPTH` = 128 levels). It is checked by the mechanisms
+below, not formally proven. Not covered: a value built directly from the public
+`Item` variants deeper than the limit, which can overflow the stack in its own
+operations; a failed memory allocation, which aborts the process; 32-bit
+targets, which are not tested.
 
 Mechanisms:
 
@@ -268,11 +268,12 @@ Only a new `Message` reads the clock (`today's date`, a fresh TCN);
 `Display` of `Error`; the position (record, tag, offset) is carried apart and
 never appears in it (`src/error.rs`).
 
-### Linear-time reading
+### Reading time
 
-`CHANGELOG.md` [Unreleased], "Fixed": reading (strict and tolerant), the exact
-rewrite and deserialization are linear in the number of fields and records;
-the parser indexes the fields of each record and of the Type-1 by tag and
+Reading (strict and tolerant), the exact rewrite and deserialization are not
+quadratic in the number of fields and records (fix described in the
+`CHANGELOG.md` entry that mentions `FieldIndex`, with the times measured before
+and after); the parser indexes the fields of each record and of the Type-1 by tag and
 alias (`FieldIndex` in `src/record/ascii.rs`, used by `src/message/parse.rs`).
 Building a record field by field through `AsciiRecord::add_field`, `set`,
 `field` or `field_mut` stays quadratic (`docs/CONFORMANCE.md` section 5,
@@ -280,7 +281,9 @@ item 12).
 
 Complexity tests, all using `assert_linear` from `tests/common/mod.rs`, which
 measures thread CPU time on an input of size `n` and one of size `16 n`, and
-fails above a ratio of 64 (about 16 expected if linear, 256 if quadratic):
+fails above a ratio of 64 (about 16 expected if linear, 256 if quadratic). The
+test rules out quadratic time; it does not distinguish linear time from, say,
+`n^1.5` (ratio 64 exactly):
 
 | Test | File |
 |------|------|
@@ -310,8 +313,8 @@ features; CI runs the suite with default features and with `--all-features`.
 | `tests/image.rs` | Image metadata of tagged and binary records. |
 | `tests/profiles.rs` | EBTS 11.2 and INT-I 5.03 profiles. |
 | `tests/properties.rs` | `proptest`: write/read round trip, exact rewrite, arbitrary and mutated bytes, JSON round trip. |
-| `tests/robustness.rs` | Former panics and memory blow-ups (bounded tag format width, bounded item depth) and the linear-time tests. |
-| `tests/serde.rs` | JSON form, round trip, checks and messages of deserialization, linear-time deserialization. |
+| `tests/robustness.rs` | Former panics and memory blow-ups (bounded tag format width, bounded item depth) and the complexity tests. |
+| `tests/serde.rs` | JSON form, round trip, checks and messages of deserialization, complexity test of deserialization. |
 | `tests/tolerant.rs` | Each error of strict mode and its diagnostic and recovery. |
 | `tests/validation.rs` | Validation against the standard. |
 | `tests/versions.rs` | Versions 0200 to 0500 read and rewritten exactly (messages built by the crate). |
@@ -331,7 +334,7 @@ No real biometric file is committed. `.gitignore` ignores `*.nist`, `*.eft`,
 in `tests/data/ALLOWLIST` (one path per line with a comment on its synthetic
 origin; the list is empty today). `tools/check-data-files.sh [--staged]` fails
 if a tracked (or staged) file with those extensions is not on the list; the CI
-job `data` runs it.
+job `data` runs it on every pull request.
 
 ### `benches/`, `examples/`
 
@@ -369,12 +372,14 @@ cargo +nightly fuzz run parse -- -max_total_time=60 -max_len=8192
 
 For `serde`: `mkdir -p fuzz/corpus/serde && cp fuzz/seeds/serde/*.json fuzz/corpus/serde/`
 first. CI adds `--target x86_64-unknown-linux-gnu` (its prebuilt `cargo-fuzz`
-is a musl binary). The same commands work from `fuzz/`
-(`cargo +nightly fuzz run parse`), as `CONTRIBUTING.md` shows.
+is a musl binary). `CONTRIBUTING.md` gives the same commands, from the
+repository root.
 
 ### `tools/`
 
-None of these runs in CI. Generated files carry a "do not edit" header.
+Only `tools/check-data-files.sh` runs in CI (job `data`, on every pull
+request); the generators are run by hand. Generated files carry a "do not edit"
+header.
 
 | Script | Writes | From |
 |--------|--------|------|
@@ -402,11 +407,11 @@ which jobs run; on a push, a called run or a manual run, everything runs.
 
 | Job | What it does |
 |-----|--------------|
-| `changes` | Classifies the diff: `rust` (src, README, benches, tests, examples, Cargo files, `deny.toml`, workflows) and `data`. |
+| `changes` | Classifies the diff: `rust` (src, README, `docs/GUIDE.md`, benches, tests, examples, Cargo files, `deny.toml`, workflows). The Rust jobs run only when it matches. |
 | `core` | Shared workflow: tests, clippy, rustfmt, docs, MSRV 1.86 `cargo check`; default features and `--all-features`. |
 | `msrv-test` | `cargo test --lib --tests` (default and all features) and `--doc` on Rust 1.86. |
 | `bench` | `cargo bench --no-run`. |
-| `data` | `tools/check-data-files.sh`. |
+| `data` | `tools/check-data-files.sh`, on every pull request (no path filter). |
 | `fuzz` | Nightly, `cargo-fuzz`: the five targets, 60 s each, from the synthetic seeds. Uploads `fuzz/artifacts` on failure. |
 | `deny` | `cargo deny --all-features check` with `deny.toml` (advisories, licences, sources). |
 | `semver` | `cargo semver-checks --all-features` against the latest release on crates.io. |
@@ -520,10 +525,11 @@ What `.github/workflows/release.yml` does, and what it does not.
 1. On a branch from `develop`: set `version` in `Cargo.toml`; rename
    `## [Unreleased]` in `CHANGELOG.md` to `## [X.Y.Z] - date`, add a new empty
    `[Unreleased]` and update the link references at the bottom.
-2. Merge it into `develop`, then bring `develop` into `main`. The workflow
-   does not state how; `ci.yml` runs on pull requests into `main`, which
-   suggests a pull request.
-3. Create the tag `vX.Y.Z` on the `main` commit and push it.
+2. Merge it into `develop`, then open a pull request from `develop` into
+   `main` titled "Release X.Y.Z" (as #87 for 1.0.2 and #73 for 1.0.1); `ci.yml`
+   runs on it.
+3. Once it is merged, create the tag `vX.Y.Z` on that `main` commit and push
+   it: the push of the tag triggers `release.yml`.
 
 **Triggers:** a push of a tag `v*`, or a manual `workflow_dispatch`.
 

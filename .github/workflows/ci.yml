@@ -1,8 +1,8 @@
 # Pull requests into develop/main only: a merge into develop replays nothing, the
 # PR was checked. `main` only receives releases, so it alone also runs on push:
 # the CI badge of the README follows it and needs runs on that branch. `changes`
-# classifies the diff; every job is skipped when its files did not change, and
-# `ci` is the one status to require. On a push, a release (workflow_call) or a
+# classifies the diff; every Rust job is skipped when its files did not change
+# (`data`, the NIST file check, always runs), and `ci` is the one status to require. On a push, a release (workflow_call) or a
 # manual run everything runs.
 #   core        shared workflow: tests, clippy, rustfmt, docs, MSRV 1.86 (cargo check only)
 #   msrv-test   the tests themselves on Rust 1.86
@@ -46,7 +46,6 @@ jobs:
       pull-requests: read # paths-filter lists the files of the pull request
     outputs:
       rust: ${{ github.event_name != 'pull_request' || steps.filter.outputs.rust == 'true' }}
-      data: ${{ github.event_name != 'pull_request' || steps.filter.outputs.data == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: filter
@@ -57,15 +56,13 @@ jobs:
             rust:
               - "src/**"
               - "README.md" # included by src/lib.rs: doctests and cargo doc
+              - "docs/GUIDE.md" # its examples are checked by tests/guide.rs
               - "benches/**"
               - "tests/**"
               - "examples/**"
               - "Cargo.*"
               - "deny.toml"
               - ".github/workflows/**"
-            data:
-              - "data/**"
-              - "tools/check-data-files.sh"
 
   core:
     needs: changes
@@ -107,10 +104,9 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo bench --no-run
 
+  # Every pull request: a NIST file can be added anywhere, and the job takes seconds.
   data:
     name: Data files (DATA-04)
-    needs: changes
-    if: needs.changes.outputs.data == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

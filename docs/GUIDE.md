@@ -4,7 +4,8 @@ This guide is organized by task. Every Rust example below is run by
 `cargo test --all-features --test guide`: the test file
 [`tests/guide.rs`](../tests/guide.rs) holds each example, and
 fails if an example of this page is missing from it (whitespace aside). In the examples, `bytes`
-is a synthetic transaction (Type-1, Type-2, Type-14) built by the test file;
+is a synthetic transaction (Type-1, Type-2, Type-14) built by the test file, and `path` the
+path of a file holding it;
 `?` assumes a function that returns `Result<_, Box<dyn std::error::Error>>`.
 
 The [API documentation](https://docs.rs/ansi-nist-itl) details every type.
@@ -163,7 +164,7 @@ assert_eq!(Message::parse(&written)?.len(), 3);
 
 `Message::new()` creates a Type-1 with today's date and a new transaction
 control number; `Message::with_defaults` fixes both. The Type-1 cannot be
-added twice nor removed. `to_bytes` normalizes: it sorts the fields of each
+added twice or removed. `to_bytes` normalizes: it sorts the fields of each
 record, writes labels on three digits and recomputes LEN and CNT.
 
 ## 6. Exact rewrite
@@ -273,9 +274,13 @@ assert_eq!(r2.get("_18")?, Value::from("H\u{c3}\u{a9}l\u{c3}\u{a8}ne")); // one 
 
 - UTF-16 and UTF-32 are read with their byte order mark, big-endian without
   one, and written big-endian without a mark.
-- A character whose encoded bytes include a separator (`0x1C` to `0x1F`) is
-  refused when encoding (`ErrorKind::Encoding`); malformed input is refused when
-  decoding (`ErrorKind::Decoding`).
+- In UTF-16 and UTF-32, a character whose encoded bytes include a separator
+  (`0x1C` to `0x1F`) is refused when encoding (`ErrorKind::Encoding`).
+  Malformed input is refused when decoding (`ErrorKind::Decoding`).
+- Known limit: in ASCII, Latin-1 and UTF-8, a text holding a separator
+  character (`U+001C` to `U+001F`) is accepted by `encode`, `set_encoded` and
+  `AsciiRecord::set`; `to_bytes` then writes a file that `Message::parse`
+  refuses. Do not put these characters in values.
 - The switch sequences of Annex B.1.8 (`STX` … `ETX`) are not supported: text
   holding `STX` is refused, except in UTF-16 and UTF-32, where byte `0x02` is
   data.
@@ -363,9 +368,11 @@ documentation ("Serialization").
 
 ## 13. Bounds of the API
 
-The crate does not panic on the bytes of a file, and does not panic on values
-given through the API within these documented bounds; outside them it returns
-an error:
+The crate is designed not to panic on any input within the documented bounds:
+bytes given to the parser are meant to give a message or an `Error`, and values
+given through the API a result or an `Error`, within these bounds. This is
+checked by fuzzing and lints, not formally proven. Outside the bounds, the API
+returns an error:
 
 - **Item depth**: items nest at most `MAX_ITEM_DEPTH` (128) lists deep. A
   deeper value is refused with `BAD_SUBFIELD_VALUE`. A file never nests items.
@@ -388,7 +395,9 @@ assert_eq!(err.kind(), &ErrorKind::BadFormat);
 ```
 
 Performance: reading (strict or tolerant), the exact rewrite and
-deserialization take a time linear in the number of fields and records.
+deserialization are not quadratic in the number of fields and records (tests
+compare the time on an input with the time on an input 16 times larger:
+`tests/robustness.rs`, `tests/serde.rs`).
 Building a record one field at a time through `AsciiRecord::set` or
 `add_field` is quadratic in its number of fields ([`CONFORMANCE.md`](CONFORMANCE.md)
 §5, item 12).

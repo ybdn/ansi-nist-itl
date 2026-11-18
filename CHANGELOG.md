@@ -26,9 +26,11 @@ All notable changes to this crate are documented here. The format follows
 - Release workflow: a version already on crates.io is not published again and an existing GitHub release is kept, so a missing tag can be pushed afterwards.
 - Repository links point to `ybdn/ansi-nist-itl` (`Cargo.toml`, README, `SECURITY.md`, issue templates) instead of the former `ybdn-ei/ansi-nist-itl`, which only redirected.
 - Community: `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1); the issue templates declare `title` and `assignees`.
-- README rewritten: scope, limits and guarantees as stated in `docs/CONFORMANCE.md`; the no-panic guarantee states its bounds; macOS is tested in CI; links to the guide and the architecture document.
-- `docs/PRD.md` translated into English, with its statuses updated for `develop` (fuzz targets, CI on macOS, UTF-16 and UTF-32).
+- README rewritten: scope and limits as stated in `docs/CONFORMANCE.md` (§1 to §5); the no-panic guarantee states its bounds (`MAX_ITEM_DEPTH`, tag format width) and that it is checked by fuzzing and lints, not formally proven; macOS is tested in CI; links to the guide and the architecture document.
+- `docs/PRD.md` translated into English, with its statuses updated for `develop` (fuzz targets, CI on macOS, UTF-16 and UTF-32, LIB-10 and QA-03 partial).
 - `CONTRIBUTING.md`: setup, documentation rules, fuzzing and how to report a crash.
+- CI: the `data` job (NIST files outside `tests/data/ALLOWLIST`) runs on every pull request; before, it ran only when `data/**` or its script changed, so a pull request adding a NIST file elsewhere skipped it. A change to `docs/GUIDE.md` runs the Rust jobs.
+- The package includes `docs/GUIDE.md`, which `tests/guide.rs` reads.
 
 ### Fixed
 

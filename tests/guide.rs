@@ -313,12 +313,33 @@ fn bounds() -> TestResult {
 }
 
 /// Every `rust` block of the guide appears here, whitespace aside (rustfmt
-/// may wrap the lines of the tests differently).
+/// may wrap the lines of the tests differently); the whitespace inside string
+/// literals is kept.
 #[test]
 fn guide_examples_are_tested() {
+    /// The text without the whitespace outside string literals. A literal ends
+    /// at its closing quote or at the end of its line (the examples have no
+    /// multi-line string).
     fn squeeze(text: &str) -> String {
-        text.chars().filter(|c| !c.is_whitespace()).collect()
+        let mut out = String::new();
+        let (mut in_string, mut escaped) = (false, false);
+        for c in text.chars() {
+            if c == '\n' {
+                in_string = false;
+            } else if in_string && escaped {
+                escaped = false;
+            } else if in_string && c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                in_string = !in_string;
+            }
+            if in_string || !c.is_whitespace() {
+                out.push(c);
+            }
+        }
+        out
     }
+    assert_eq!(squeeze("let a = \"x  y\";\n b"), "leta=\"x  y\";b");
     let guide = include_str!("../docs/GUIDE.md");
     let tests = squeeze(include_str!("guide.rs"));
     let mut blocks = 0;
