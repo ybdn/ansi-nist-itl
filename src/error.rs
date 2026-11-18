@@ -131,7 +131,7 @@ pub enum ErrorKind {
     TypeMismatch,
     /// `ValueError` of `min()` on an empty list: `min() iterable argument is empty`.
     EmptySequence,
-    /// Unsupported tag format template (only `%[0][n]d`); no Python equivalent.
+    /// Unsupported tag format template (only `%[0][n]d`, width at most 1024); no Python equivalent.
     BadFormat,
     /// I/O error of the file and reader helpers; no Python equivalent.
     Io(std::io::ErrorKind),

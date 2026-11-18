@@ -249,6 +249,13 @@ fn checks_of_the_api() {
         error::<Field>(json!({ "record": 2, "tag": 3, "format": "%d:", "value": "" }))
             .contains("format")
     );
+    // A width that would pad the label to gigabytes when written.
+    assert!(
+        error::<Field>(
+            json!({ "record": 2, "tag": 3, "format": "%d.%099999999999d:", "value": "" })
+        )
+        .contains("format")
+    );
     // As with the API, an unknown type fails at its first field.
     assert!(serde_json::from_value::<AsciiRecord>(json!({ "type": 23, "fields": [] })).is_ok());
     assert!(
