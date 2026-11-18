@@ -11,7 +11,7 @@ documentation = "https://docs.rs/ansi-nist-itl"
 readme = "README.md"
 keywords = ["nist", "biometrics", "fingerprint", "ansi-nist-itl", "ebts"]
 categories = ["parser-implementations", "encoding"]
-exclude = ["/fuzz", "/tools", "/docs", "/.github"]
+exclude = ["/fuzz", "/tools", "/docs/ARCHITECTURE.md", "/docs/CONFORMANCE.md", "/docs/PRD.md", "/.github"]
 
 [package.metadata.docs.rs]
 all-features = true

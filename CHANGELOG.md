@@ -14,6 +14,8 @@ All notable changes to this crate are documented here. The format follows
 - Fuzz target `serde`: a message deserialized from any JSON, then written, summarized and validated; run by the CI and the scheduled workflow from the seeds of `fuzz/seeds/serde`.
 - `MAX_ITEM_DEPTH` (128): the deepest nesting of `Item::List` that a subfield, a field or a record accepts.
 - Lint policy in `src/lib.rs`: `unwrap`, `expect`, `panic!`, `unreachable!`, `todo!`, `unimplemented!` and unchecked indexing or slicing are denied outside the tests.
+- `docs/GUIDE.md`, a user guide by task (reading, walking records, writing, exact rewrite, tolerant mode, errors, encodings, validation, dictionary, `serde`, bounds of the API). Its examples are run by `tests/guide.rs`, which fails if an example of the guide is missing from it.
+- `docs/ARCHITECTURE.md`, for contributors: modules, the path from bytes to model and back, invariants and how they are checked, tests, fuzzing, CI, how to extend the dictionary or add a profile, how a release is published.
 
 ### Changed
 
@@ -24,6 +26,11 @@ All notable changes to this crate are documented here. The format follows
 - Release workflow: a version already on crates.io is not published again and an existing GitHub release is kept, so a missing tag can be pushed afterwards.
 - Repository links point to `ybdn/ansi-nist-itl` (`Cargo.toml`, README, `SECURITY.md`, issue templates) instead of the former `ybdn-ei/ansi-nist-itl`, which only redirected.
 - Community: `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1); the issue templates declare `title` and `assignees`.
+- README rewritten: scope and limits as stated in `docs/CONFORMANCE.md` (§1 to §5); the no-panic guarantee states its bounds (`MAX_ITEM_DEPTH`, tag format width) and that it is checked by fuzzing and lints, not formally proven; macOS is tested in CI; links to the guide and the architecture document.
+- `docs/PRD.md` translated into English, with its statuses updated for `develop` (fuzz targets, CI on macOS, UTF-16 and UTF-32, LIB-10 and QA-03 partial).
+- `CONTRIBUTING.md`: setup, documentation rules, fuzzing and how to report a crash.
+- CI: the `data` job (NIST files outside `tests/data/ALLOWLIST`) runs on every pull request; before, it ran only when `data/**` or its script changed, so a pull request adding a NIST file elsewhere skipped it. A change to `docs/GUIDE.md` runs the Rust jobs.
+- The package includes `docs/GUIDE.md`, which `tests/guide.rs` reads.
 
 ### Fixed
 
