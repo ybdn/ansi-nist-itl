@@ -1,7 +1,9 @@
 ---
 name: Bug report
 about: A file read or written wrongly, an error, a panic
+title: ""
 labels: bug
+assignees: ""
 ---
 
 <!-- Never attach a real NIST file: it holds biometric and personal data. See SECURITY.md. -->

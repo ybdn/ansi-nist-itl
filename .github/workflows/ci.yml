@@ -8,6 +8,10 @@
 #   msrv-test   the tests themselves on Rust 1.86
 #   oracle      comparison with nistitl 0.6 on CPython 3.12.16 (tools/oracle/README.md)
 #   fuzz        one minute per fuzz target, from a synthetic seed corpus
+#   deny        cargo-deny: advisories, licences, sources (deny.toml)
+#   semver      cargo-semver-checks against the latest release on crates.io
+#   test-macos  the test suite on the hosted macOS runner
+#   coverage    line coverage with cargo-llvm-cov, shown in the job summary
 # The long fuzzing (about twenty minutes) and the advisories: scheduled.yml.
 name: CI
 
@@ -59,6 +63,7 @@ jobs:
               - "tests/**"
               - "examples/**"
               - "Cargo.*"
+              - "deny.toml"
               - ".github/workflows/**"
             oracle:
               - *rust
@@ -195,7 +200,85 @@ jobs:
           name: fuzz-artifacts
           path: fuzz/artifacts
 
-  # Manual only: the other jobs are Linux. Same test commands as `core` (default features,
+  deny:
+    name: cargo-deny (advisories, licences, sources)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-deny
+      - run: cargo deny --all-features check
+
+  # Against the latest version published on crates.io, with the bump that the
+  # version of Cargo.toml implies.
+  semver:
+    name: cargo-semver-checks
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-semver-checks
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo semver-checks --all-features
+
+  # Same test commands as `core` (default features, then --all-features).
+  test-macos:
+    name: Tests on macOS
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo test --all-targets
+      - run: cargo test --doc
+      - run: cargo test --all-targets --all-features
+      - run: cargo test --doc --all-features
+
+  # Measured only, no threshold and no third-party service: the table goes to the
+  # summary of the run.
+  coverage:
+    name: Coverage (cargo-llvm-cov)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-llvm-cov
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo llvm-cov --all-features --lib --tests --no-report
+      - name: Summary
+        run: |
+          {
+            echo '## Line coverage (all features, library and tests)'
+            echo '```'
+            cargo llvm-cov report --summary-only
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Manual only: the other jobs are Linux and macOS. Same test commands as `core` (default features,
   # then --all-features). Not in `ci`'s needs: it never blocks a pull request.
   test-windows:
     if: github.event_name == 'workflow_dispatch' && inputs.run_windows
@@ -216,7 +299,7 @@ jobs:
   # The one status to read: green when every needed job passed or was skipped.
   ci:
     if: ${{ !cancelled() }}
-    needs: [changes, core, msrv-test, bench, oracle, data, fuzz]
+    needs: [changes, core, msrv-test, bench, oracle, data, fuzz, deny, semver, test-macos, coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

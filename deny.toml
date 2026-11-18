@@ -1,0 +1,27 @@
+# cargo-deny, run by the `deny` job of ci.yml: advisories, licences, sources.
+# The weekly RustSec run stays in scheduled.yml: this one gates pull requests.
+
+[graph]
+all-features = true
+
+[advisories]
+# Every advisory fails, unmaintained and unsound crates included; an exception goes
+# in `ignore` with the advisory id and the reason.
+unmaintained = "all"
+yanked = "deny"
+ignore = []
+
+[licenses]
+# Licences compatible with distributing the crate under MIT.
+allow = ["MIT", "Apache-2.0", "Unicode-3.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib"]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
