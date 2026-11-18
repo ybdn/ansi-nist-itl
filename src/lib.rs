@@ -195,6 +195,27 @@
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
+// No input, from a file or through the API, may panic: errors are returned.
+// A proven invariant needs a local `#[allow]` that says why it holds.
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+    clippy::indexing_slicing
+)]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::indexing_slicing
+    )
+)]
 
 pub mod alias;
 mod bytes;
