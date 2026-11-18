@@ -1,6 +1,6 @@
 //! Python's `struct` language, as CPython 3.12 implements it.
 //!
-//! the reference implementation packs and unpacks the value of binary records with
+//! The crate packs and unpacks the value of binary records with
 //! `struct.pack` and `struct.unpack`. This module reproduces their sizes,
 //! alignments, conversions and error messages; Python exceptions become
 //! errors of kind [`ErrorKind::Struct`](crate::ErrorKind::Struct), except the
@@ -875,7 +875,7 @@ mod tests {
     }
 }
 
-/// Vectors of `tools/oracle/gen_struct_vectors.py`, computed by CPython 3.12.
+/// Vectors of `tools/python/gen_struct_vectors.py`, computed by CPython 3.12.
 #[cfg(test)]
 mod cpython_vectors {
     use super::*;

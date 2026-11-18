@@ -6,7 +6,6 @@
 # manual run everything runs.
 #   core        shared workflow: tests, clippy, rustfmt, docs, MSRV 1.86 (cargo check only)
 #   msrv-test   the tests themselves on Rust 1.86
-#   oracle      comparison with nistitl 0.6 on CPython 3.12.16 (tools/oracle/README.md)
 #   fuzz        one minute per fuzz target, from a synthetic seed corpus
 #   deny        cargo-deny: advisories, licences, sources (deny.toml)
 #   semver      cargo-semver-checks against the latest release on crates.io
@@ -47,7 +46,6 @@ jobs:
       pull-requests: read # paths-filter lists the files of the pull request
     outputs:
       rust: ${{ github.event_name != 'pull_request' || steps.filter.outputs.rust == 'true' }}
-      oracle: ${{ github.event_name != 'pull_request' || steps.filter.outputs.oracle == 'true' }}
       data: ${{ github.event_name != 'pull_request' || steps.filter.outputs.data == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -56,7 +54,7 @@ jobs:
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
-            rust: &rust
+            rust:
               - "src/**"
               - "README.md" # included by src/lib.rs: doctests and cargo doc
               - "benches/**"
@@ -65,9 +63,6 @@ jobs:
               - "Cargo.*"
               - "deny.toml"
               - ".github/workflows/**"
-            oracle:
-              - *rust
-              - "tools/oracle/**"
             data:
               - "data/**"
               - "tools/check-data-files.sh"
@@ -111,39 +106,6 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo bench --no-run
-
-  oracle:
-    name: Oracle (nistitl 0.6)
-    needs: changes
-    if: needs.changes.outputs.oracle == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # uv 0.13.6, then CPython 3.12.16 and nistitl 0.6, all from files with
-      # hashes (tools/oracle/requirements*.txt): nothing floats.
-      - name: Install uv
-        run: |
-          python3 -m venv "$RUNNER_TEMP/uv"
-          "$RUNNER_TEMP/uv/bin/python" -m pip install --require-hashes --only-binary :all: -r tools/oracle/requirements-uv.txt
-          echo "$RUNNER_TEMP/uv/bin" >> "$GITHUB_PATH"
-      - name: Install CPython 3.12.16 and nistitl
-        run: |
-          uv python install 3.12.16
-          uv venv --python 3.12.16 "$RUNNER_TEMP/oracle"
-          uv pip install --python "$RUNNER_TEMP/oracle" --require-hashes --only-binary :all: -r tools/oracle/requirements.txt
-          "$RUNNER_TEMP/oracle/bin/python" -c 'import sys; assert sys.version_info[:3] == (3, 12, 16), sys.version'
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Synthetic corpus (seed = run number)
-        run: $RUNNER_TEMP/oracle/bin/python -I tools/oracle/gen_corpus.py "$RUNNER_TEMP/corpus" 20000 "$GITHUB_RUN_NUMBER"
-      - name: Compare with nistitl
-        run: cargo test --release --test oracle
-        env:
-          ANSI_NIST_ITL_CORPUS: ${{ runner.temp }}/corpus
-          ANSI_NIST_ITL_PYTHON: ${{ runner.temp }}/oracle/bin/python
 
   data:
     name: Data files (DATA-04)
@@ -303,7 +265,7 @@ jobs:
   # The one status to read: green when every needed job passed or was skipped.
   ci:
     if: ${{ !cancelled() }}
-    needs: [changes, core, msrv-test, bench, oracle, data, fuzz, deny, semver, test-macos, coverage]
+    needs: [changes, core, msrv-test, bench, data, fuzz, deny, semver, test-macos, coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

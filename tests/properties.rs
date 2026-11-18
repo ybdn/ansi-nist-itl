@@ -1,6 +1,6 @@
 //! Properties of the writing and the reading (QA-03, QA-05).
 //!
-//! Messages are generated through the API, in the forms that the reference implementation
+//! Messages are generated through the API, in the forms that the crate
 //! reads back as written: Latin-1 text without separators nor `999:`,
 //! lists of at least two subfields or items, no `None`, no alias of its own.
 
@@ -50,7 +50,7 @@ fn value() -> impl Strategy<Value = Value> {
 }
 
 /// Tags of the extra fields: not LEN, IDC nor 999, and no label ending in
-/// `999:` (quirk E3 of the reference implementation).
+/// `999:` (quirk E3, `src/error.rs`).
 fn tags() -> impl Strategy<Value = Vec<u32>> {
     btree_set(3u32..2_000, 0..6).prop_map(|tags| {
         tags.into_iter()

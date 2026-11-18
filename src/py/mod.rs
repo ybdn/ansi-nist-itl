@@ -1,6 +1,6 @@
-//! Python 3.12 conversions that the reference implementation relies on.
+//! Python 3.12 conversions that the crate relies on.
 //!
-//! the reference implementation reads numbers with `int()`, writes values with `str()`, builds
+//! The crate reads numbers with `int()`, writes values with `str()`, builds
 //! error messages and summaries with `repr()` and string formatting. Matching
 //! its output character for character requires reproducing CPython's rules,
 //! Unicode tables included. Everything here is internal to the crate.

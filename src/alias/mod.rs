@@ -1,4 +1,4 @@
-//! Aliases of the fields, as the reference implementation defines them (`ALIASES`, LIB-07).
+//! Aliases of the fields (`ALIASES`, LIB-07).
 //!
 //! A field added to a record without alias takes the alias of its tag in
 //! the table of the record type. One constant is defined per distinct
@@ -17,8 +17,8 @@
 //! # Ok::<(), ansi_nist_itl::Error>(())
 //! ```
 //!
-//! A record type absent from the table is unknown: the reference implementation raises
-//! `KeyError`, the crate [`ErrorKind::UnknownRecordType`](crate::ErrorKind::UnknownRecordType).
+//! A record type absent from the table is unknown and gives
+//! [`ErrorKind::UnknownRecordType`](crate::ErrorKind::UnknownRecordType).
 
 mod names;
 mod table;

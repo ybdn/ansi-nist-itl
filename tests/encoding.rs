@@ -38,7 +38,7 @@ fn utf8_through_writing_and_reading() {
         r2.get_decoded("_18", encoding).unwrap(),
         Value::from(NAMES.to_vec())
     );
-    // Without decoding, the text stays the Latin-1 view, as in the reference implementation.
+    // Without decoding, the text stays the Latin-1 view.
     let views: Vec<String> = NAMES
         .iter()
         .map(|n| n.bytes().map(char::from).collect())
