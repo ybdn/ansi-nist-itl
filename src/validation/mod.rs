@@ -12,7 +12,7 @@
 //! number; a Type-9 EFS path is one item `x1,y1-x2,y2-…` of non-negative
 //! integers, at least 3 vertices (2 for 9.373 RPS, the open path); a list of
 //! Types 10 to 12 is one item `a|b|c`; user-defined items (18.018) may be any
-//! number, each present.
+//! number, an empty one being a warning.
 //!
 //! Not checked: the other dependent conditions (`D`), the value constraints
 //! of the tables (ranges, code lists), and the content of user-defined
@@ -609,15 +609,17 @@ impl Validator {
             return;
         }
         // 18.018: "user-defined information items (there may be multiple items)":
-        // any number, any content, but each one present (M↑).
+        // any number, any content. The table marks them M↑, but NIST's own
+        // conformant samples (BioCTS) leave them empty: an empty one is a warning.
         if group
             .items
             .iter()
             .all(|d| d.format.char_type == CharType::UserDefined)
         {
-            if let Some(def) = group.items.first() {
-                for (i, text) in items.iter().enumerate() {
-                    self.item(def, Some(text), here.item(i));
+            for (i, text) in items.iter().enumerate() {
+                if text.is_empty() {
+                    let message = "user-defined item is empty".to_owned();
+                    self.push(Rule::MissingItem, Level::Warning, here.item(i), message);
                 }
             }
             return;

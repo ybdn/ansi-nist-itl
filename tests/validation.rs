@@ -450,17 +450,35 @@ fn lists_in_one_item() {
 }
 
 /// 18.018: "user-defined information items (there may be multiple items)":
-/// any number, any content, but each item present (M↑).
+/// any number, any content. The table marks them M↑, but conformant BioCTS
+/// samples of NIST leave them empty: an empty one is a warning only.
 #[test]
-fn user_defined_items_are_free_but_present() {
+fn user_defined_items_are_free() {
     let udp = vec![vec!["a", "b", "c"], vec!["d"]];
     assert_eq!(on_field(18, 18, udp), Vec::<String>::new());
-    let name = "user-defined information items (there may be multiple items)";
     assert_eq!(
-        on_field(18, 18, vec![vec![""]]),
-        [format!(
-            "18.018 subfield 1 item 1: mandatory item {name} is empty"
-        )]
+        on_field(18, 18, vec![vec!["", ""]]),
+        [
+            "18.018 subfield 1 item 1: user-defined item is empty",
+            "18.018 subfield 1 item 2: user-defined item is empty",
+        ]
+    );
+    let mut msg = conformant();
+    let mut r18 = AsciiRecord::new(18).unwrap();
+    r18.set("IDC", 9).unwrap();
+    r18.add_field(Field::new(18, 18, vec![vec![""]]).unwrap())
+        .unwrap();
+    msg.push(r18).unwrap();
+    let report = read(msg).validate();
+    let udp: Vec<_> = report
+        .findings
+        .iter()
+        .filter(|f| f.to_string().starts_with("18.018"))
+        .collect();
+    assert_eq!(udp.len(), 1);
+    assert_eq!(
+        (udp[0].rule, udp[0].level),
+        (Rule::MissingItem, Level::Warning)
     );
 }
 
