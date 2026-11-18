@@ -277,10 +277,14 @@ assert_eq!(r2.get("_18")?, Value::from("H\u{c3}\u{a9}l\u{c3}\u{a8}ne")); // one 
 - In UTF-16 and UTF-32, a character whose encoded bytes include a separator
   (`0x1C` to `0x1F`) is refused when encoding (`ErrorKind::Encoding`).
   Malformed input is refused when decoding (`ErrorKind::Decoding`).
-- Known limit: in ASCII, Latin-1 and UTF-8, a text holding a separator
-  character (`U+001C` to `U+001F`) is accepted by `encode`, `set_encoded` and
-  `AsciiRecord::set`; `to_bytes` then writes a file that `Message::parse`
-  refuses. Do not put these characters in values.
+- A separator character (`U+001C` to `U+001F`) is refused in every
+  encoding: `encode` and `set_encoded` refuse it when the value is set
+  (`ErrorKind::Encoding`); a value set through `AsciiRecord::set` or
+  deserialized is refused when the record is written, with the position of
+  the field. In a record type with a data field, `999:` outside that field is
+  refused when written (`ErrorKind::DataLabel`). Within the domain of the
+  property tests, a message is refused or read back as written;
+  [`CONFORMANCE.md`](CONFORMANCE.md) §5, item 11, lists what lies outside it.
 - The switch sequences of Annex B.1.8 (`STX` … `ETX`) are not supported: text
   holding `STX` is refused, except in UTF-16 and UTF-32, where byte `0x02` is
   data.
@@ -400,4 +404,4 @@ compare the time on an input with the time on an input 16 times larger:
 `tests/robustness.rs`, `tests/serde.rs`).
 Building a record one field at a time through `AsciiRecord::set` or
 `add_field` is quadratic in its number of fields ([`CONFORMANCE.md`](CONFORMANCE.md)
-§5, item 12).
+§5, item 10).

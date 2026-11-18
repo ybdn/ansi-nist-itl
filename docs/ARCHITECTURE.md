@@ -194,8 +194,8 @@ strict-mode error and its recovery.
 
 | Invariant | Mechanism | Evidence |
 |-----------|-----------|----------|
-| A buffer accepted by `parse` is given back by `to_bytes_exact`, before and after `to_bytes`. Known limit: a value set through the API that holds a separator byte (`0x1C` to `0x1F`) or the data label `999:` is written as is, and the result may not read back; the invariant covers buffers read, and values without these bytes | Origin kept per record and per field (section 2) | `tests/properties.rs`: `exact_writing_gives_back_the_buffer`, `any_bytes`, `mutated_message`; `tests/conformance.rs` (every record type, and the corpus report when `ANSI_NIST_ITL_CORPUS` is set); fuzz target `exact`; `tests/versions.rs` |
-| `to_bytes` then `parse` gives the same summary and the same bytes | Same writer for both | `tests/properties.rs`: `written_message_reads_back` |
+| A buffer accepted by `parse` is given back by `to_bytes_exact`, before and after `to_bytes`; a field added after the reading is written before the data field | Origin kept per record and per field (section 2) | `tests/properties.rs`: `exact_writing_gives_back_the_buffer`, `any_bytes`, `mutated_message`; `tests/conformance.rs` (every record type, and the corpus report when `ANSI_NIST_ITL_CORPUS` is set); fuzz target `exact`; `tests/versions.rs` |
+| `to_bytes` then `parse` gives the same summary and the same bytes, within the domain of the property tests; outside it, both writings (`to_bytes`, and `to_bytes_exact` for every record built or changed) refuse what the reading would cut or misread (separators, `999:` outside the data field, a text field at the data tag, unreadable tag labels, binary records of tagged types) and the file is read with the same records and data fields (`docs/CONFORMANCE.md` §5, item 11) | Same writer for both; checks per value (`no_separator`), per record (`check_in_record`) and per message (`check_binary_type`, `check_idcs`), the data field written last; tag formats checked when a field is built, except the default format of a tag that is not negative, which always reads back | `tests/properties.rs`: `written_message_reads_back`, `dirty_message_is_refused_or_read_back`, `wide_message_is_refused_or_readable`, `field_added_after_reading`; `tests/separators.rs` |
 | No panic on input | Lint policy, no `unsafe`, bounded recursion and width | below |
 | Same input, same output and same error messages | No clock or randomness in parsing or writing; `Defaults` fixes what a new Type-1 draws from the clock | `src/lib.rs` ("Behaviour"), `src/defaults.rs` |
 | Reading is not quadratic in the number of fields and records | Per-record index of fields by tag and alias, built once | `tests/robustness.rs`, `tests/serde.rs` (ratio tests, below) |
@@ -277,7 +277,7 @@ and after); the parser indexes the fields of each record and of the Type-1 by ta
 alias (`FieldIndex` in `src/record/ascii.rs`, used by `src/message/parse.rs`).
 Building a record field by field through `AsciiRecord::add_field`, `set`,
 `field` or `field_mut` stays quadratic (`docs/CONFORMANCE.md` section 5,
-item 12).
+item 10).
 
 Complexity tests, all using `assert_linear` from `tests/common/mod.rs`, which
 measures thread CPU time on an input of size `n` and one of size `16 n`, and

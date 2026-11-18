@@ -1,5 +1,5 @@
-//! Traditional versions 0200 to 0500 (LIB-19, PRD §9.1): read as any other
-//! version, since the parser never looks at 1.002.
+//! Versions 0200, 0300, 0400 and 0500 of field 1.002 (LIB-19, PRD §9.1): read
+//! as any other value, since the parser never looks at 1.002.
 //!
 //! Messages are built by the crate (DATA-01), each with the record types of
 //! its version, then read, rewritten and written back exactly.

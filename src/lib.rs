@@ -80,9 +80,10 @@
 //! # Versions
 //!
 //! The crate never reads the version of the standard (1.002,
-//! kept as text): every version is read and written the same way, the
-//! traditional ones (0200 to 0500) as the later ones. No rule depends on the
-//! version: a record type is accepted whatever the version declares, and
+//! kept as text): every value of field 1.002 is read and written the same
+//! way; the tests cover `0200`, `0300`, `0400`, `0500` and `0502`. No rule
+//! depends on the version: a record type is accepted whatever the version
+//! declares, and
 //! Types 3, 5 and 6 give a [`Warning::Deprecated`] in every version.
 //!
 //! ```

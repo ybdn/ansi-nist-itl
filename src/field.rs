@@ -1,11 +1,81 @@
 //! Text and binary fields of a tagged record.
 
-use crate::RS;
 use crate::bytes::Bytes;
-use crate::error::{Error, Position, Result};
+use crate::error::{Error, ErrorKind, Position, Result};
 use crate::py::{PrintfTemplate, encode_latin1, py_int};
 use crate::subfield::SubField;
 use crate::value::{Kind, ListElem, PyInt, Scalar, SubValue, Value};
+use crate::{FS, RS, US, alias};
+
+/// Refuses a separator (FS, GS, RS, US) in the bytes of a value: the reading
+/// would end the item, subfield, field or record there.
+pub(crate) fn no_separator(bytes: &[u8]) -> Result<()> {
+    match bytes.iter().find(|b| (FS..=US).contains(b)) {
+        Some(b) => Err(Error::new(
+            ErrorKind::Encoding,
+            format!("the separator byte 0x{b:02X} cannot be written in a value"),
+        )),
+        None => Ok(()),
+    }
+}
+
+/// The data field of a record type (its `DATA` alias) and its label, as the
+/// reading searches it (`999:`); `None` for a type without one.
+pub(crate) fn data_label(record: u32) -> Option<(u32, Vec<u8>)> {
+    let tag = alias::table(record).and_then(|t| alias::tag_of(t, alias::DATA))?;
+    Some((tag, format!("{tag}:").into_bytes()))
+}
+
+/// The checks of a field that depend on its record, on the `bytes` it is
+/// written with, given the [`data_label`] of the record. Only the data field
+/// may hold any byte, and it must be binary. Another binary field may not
+/// hold a separator, which the reading would cut it at; no field but the
+/// data field may hold the data label, which the reading would take for the
+/// start of the data.
+pub(crate) fn check_in_record(
+    field: &AnyField,
+    bytes: &[u8],
+    data: Option<&(u32, Vec<u8>)>,
+) -> Result<()> {
+    let is_data = data.is_some_and(|(tag, _)| field.tag().to_i64() == Some(i64::from(*tag)));
+    if is_data {
+        // The reading reads this field as binary data.
+        return match field {
+            AnyField::Binary(_) => Ok(()),
+            AnyField::Text(_) => Err(Error::new(
+                ErrorKind::DataLabel,
+                format!(
+                    "field {} holds the data of its record: it must be binary",
+                    field.tag()
+                ),
+            )),
+        };
+    }
+    if let AnyField::Binary(_) = field {
+        no_separator(bytes)?;
+    }
+    match data {
+        Some((_, label)) if holds(bytes, label) => Err(Error::new(
+            ErrorKind::DataLabel,
+            format!(
+                "{} cannot be written outside the data field: it would be read as its label",
+                String::from_utf8_lossy(label)
+            ),
+        )),
+        _ => Ok(()),
+    }
+}
+
+/// Whether `bytes` holds `label`, which ends with `:`: compared only where a
+/// `:` is.
+fn holds(bytes: &[u8], label: &[u8]) -> bool {
+    let n = label.len();
+    bytes
+        .iter()
+        .enumerate()
+        .filter(|&(_, &b)| b == b':')
+        .any(|(i, _)| i + 1 >= n && bytes.get(i + 1 - n..=i) == Some(label))
+}
 
 /// Default tag format: `'%d.%03d:'`.
 pub(crate) const DEFAULT_FORMAT: &str = "%d.%03d:";
@@ -26,10 +96,38 @@ fn tag_number(tag: Scalar, record: u32) -> Result<PyInt> {
     })
 }
 
-/// Parses a tag format template.
+/// Parses a tag format template, which must give a label that the reading
+/// reads back as this field: `record.tag:` in ASCII digits, padded with zeros
+/// at most.
 fn tag_format(format: &str, record: u32, tag: &PyInt) -> Result<PrintfTemplate> {
-    PrintfTemplate::parse(format)
-        .map_err(|e| Error::from(e).with_position(field_position(record, tag)))
+    let position = || field_position(record, tag);
+    let template =
+        PrintfTemplate::parse(format).map_err(|e| Error::from(e).with_position(position()))?;
+    // The default format of a tag that is not negative always reads back:
+    // the parser builds every field with it, and does not pay the check.
+    if format == DEFAULT_FORMAT && !tag.is_negative() {
+        return Ok(template);
+    }
+    let label = template.render(&PyInt::from(record), tag);
+    if !readable_label(&label, record, tag) {
+        let message = format!(
+            "tag format {format:?} gives the label {label:?}, which the reading does not read back as field {record}.{tag}"
+        );
+        return Err(Error::new(ErrorKind::BadFormat, message).with_position(position()));
+    }
+    Ok(template)
+}
+
+/// Whether the reading reads `label` back as the label of field `record.tag`.
+fn readable_label(label: &str, record: u32, tag: &PyInt) -> bool {
+    let Some((r, t)) = label.strip_suffix(':').and_then(|l| l.split_once('.')) else {
+        return false;
+    };
+    let number = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    number(r)
+        && number(t)
+        && r.trim_start_matches('0').parse::<u64>().unwrap_or(0) == u64::from(record)
+        && py_int(t).ok().as_ref() == Some(tag)
 }
 
 /// Position of an error raised by a field.
@@ -92,8 +190,10 @@ impl Field {
     /// `Field(record, tag, value, type, format, alias)`.
     ///
     /// `format` is a `printf` template applied to `(record, tag)`, made of
-    /// literal text and exactly two `%[0][width]d` conversions; any other
-    /// template gives a `BadFormat` error. The value is then set as with
+    /// literal text and exactly two `%[0][width]d` conversions, and giving a
+    /// label that the reading reads back as this field (`record.tag:`, in
+    /// digits padded with zeros at most); any other template, and a negative
+    /// tag, gives a `BadFormat` error. The value is then set as with
     /// [`Field::set_value`].
     ///
     /// ```
@@ -438,7 +538,10 @@ impl Field {
     ///
     /// Without subfields, the scalar value as `str(value)` (nothing for
     /// `None`); otherwise the subfields separated by RS. A character outside
-    /// Latin-1 gives an `Encoding` error.
+    /// Latin-1 gives an `Encoding` error, and so does a separator (FS, GS, RS,
+    /// US) in a value, which the reading would cut the value at. The checks
+    /// that depend on the record (the data label `999:`) are made when the
+    /// record is written.
     ///
     /// ```
     /// use ansi_nist_itl::Field;
@@ -447,6 +550,7 @@ impl Field {
     /// assert_eq!(Field::new(2, 3, true)?.to_bytes()?, b"2.003:True");
     /// assert_eq!(Field::new(2, 1000, "x")?.to_bytes()?, b"2.1000:x");
     /// assert!(Field::new(2, 3, "€")?.to_bytes().is_err());
+    /// assert!(Field::new(2, 3, "a\u{1d}b")?.to_bytes().is_err());
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
@@ -456,20 +560,26 @@ impl Field {
 
     fn to_bytes_inner(&self) -> Result<Vec<u8>> {
         let label = self.label();
-        if self.subfields.is_empty() {
+        let out = if self.subfields.is_empty() {
+            // One byte per character in Latin-1.
+            let label_len = label.chars().count();
             let text = match &self.value {
                 Scalar::Null => label,
                 value => format!("{label}{value}"),
             };
-            return Ok(encode_latin1(&text)?);
-        }
-        let mut out = encode_latin1(&label)?;
-        for (i, sf) in self.subfields.iter().enumerate() {
-            if i > 0 {
-                out.push(RS);
+            let out = encode_latin1(&text)?;
+            no_separator(out.get(label_len..).unwrap_or_default())?;
+            out
+        } else {
+            let mut out = encode_latin1(&label)?;
+            for (i, sf) in self.subfields.iter().enumerate() {
+                if i > 0 {
+                    out.push(RS);
+                }
+                out.extend(sf.to_bytes()?);
             }
-            out.extend(sf.to_bytes()?);
-        }
+            out
+        };
         Ok(out)
     }
 
@@ -658,6 +768,12 @@ impl BinaryField {
     }
 
     /// Bytes of the field (`NIST`): the tag label in Latin-1, then the value.
+    ///
+    /// The value is not checked here: when the record is written
+    /// ([`AsciiRecord::to_bytes`](crate::AsciiRecord::to_bytes)), only its
+    /// data field may hold any byte; another binary field holding a separator
+    /// gives an `Encoding` error, and one holding the data label (`999:`) a
+    /// `DataLabel` error.
     ///
     /// ```
     /// use ansi_nist_itl::BinaryField;
@@ -938,15 +1054,23 @@ mod tests {
 
     #[test]
     fn non_latin1_label() {
-        let f = Field::with(2, 3, "x", Kind::FSI, "\u{20ac}%d.%d", "").unwrap();
-        assert_eq!(
-            f.to_bytes().unwrap_err().to_string(),
-            "'latin-1' codec can't encode character '\\u20ac' in position 0: ordinal not in range(256)"
-        );
-        let f = Field::with(2, 3, vec!["x"], Kind::FSI, "%d.%d\u{20ac}", "").unwrap();
-        assert_eq!(f.to_bytes().unwrap_err().kind(), &ErrorKind::Encoding);
-        let f = BinaryField::with(2, 3, b"", "%d.%d\u{20ac}", "").unwrap();
-        assert_eq!(f.to_bytes().unwrap_err().kind(), &ErrorKind::Encoding);
+        // A label the reading does not read back is refused when built.
+        for format in [
+            "\u{20ac}%d.%d",
+            "%d.%d\u{20ac}",
+            "%d.%03d\u{1d}:",
+            "%d.%03d:\u{1e}",
+            "%d-%03d:",
+            "%d.%3d:",
+        ] {
+            let e = Field::with(2, 3, "x", Kind::FSI, format, "").unwrap_err();
+            assert_eq!(e.kind(), &ErrorKind::BadFormat, "{format}");
+            let e = BinaryField::with(2, 3, b"", format, "").unwrap_err();
+            assert_eq!(e.kind(), &ErrorKind::BadFormat, "{format}");
+        }
+        assert!(Field::new(2, -5, "x").is_err());
+        // Zeros are read back.
+        assert!(Field::with(2, 3, "x", Kind::FSI, "%03d.%05d:", "").is_ok());
     }
 
     #[test]

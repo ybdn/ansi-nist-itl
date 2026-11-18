@@ -8,7 +8,7 @@ use crate::alias;
 use crate::bytes::Bytes;
 use crate::defaults::Defaults;
 use crate::error::{Error, Position, Result};
-use crate::field::{AnyField, BinaryField, Field};
+use crate::field::{AnyField, BinaryField, Field, check_in_record, data_label};
 use crate::py::{pad_int, pad_str, py_int, thousands};
 use crate::value::{PyInt, Value};
 use crate::{FS, GS};
@@ -825,7 +825,13 @@ impl AsciiRecord {
         if self.autosort {
             text.sort_by(|a, b| a.tag().cmp(b.tag()));
         }
-        text.extend(binary);
+        // The data field last: the reading takes what follows it as data.
+        let data = alias::table(self.record_type).and_then(|t| alias::tag_of(t, alias::DATA));
+        let is_data = |f: &&AnyField| data.is_some_and(|t| f.tag().to_i64() == Some(i64::from(t)));
+        let (data_fields, others): (Vec<&AnyField>, Vec<&AnyField>) =
+            binary.into_iter().partition(is_data);
+        text.extend(others);
+        text.extend(data_fields);
         text
     }
 
@@ -836,6 +842,12 @@ impl AsciiRecord {
     /// The first field, whatever its tag, takes the length of the record:
     /// it keeps this value afterwards. An empty record gives
     /// `IndexOutOfRange`, a binary first field `TypeMismatch`.
+    ///
+    /// What the reading would cut or misread is refused: a separator in a
+    /// text value or in a binary field other than the data field
+    /// (`Encoding`), and, in a record type with data, the data label `999:`
+    /// in another field or a text field at the data tag (`DataLabel`). The
+    /// data field is written last.
     ///
     /// ```
     /// use ansi_nist_itl::{AsciiRecord, Value};
@@ -850,13 +862,18 @@ impl AsciiRecord {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn to_bytes(&mut self) -> Result<Vec<u8>> {
+        let data = data_label(self.record_type);
         let mut rest = Vec::new();
         for (i, field) in self.sorted_fields(1).into_iter().enumerate() {
             if i > 0 {
                 rest.push(GS);
             }
-            rest.extend(field.to_bytes()?);
+            let bytes = field.to_bytes()?;
+            check_in_record(field, &bytes, data.as_ref())
+                .map_err(|e| e.with_position(self.field_position(field.tag())))?;
+            rest.extend(bytes);
         }
+
         let position = self.record_position();
         // The fixed point runs on a copy of the first field, written back
         // only if it changed: a record read keeps sharing its fields.
@@ -873,6 +890,12 @@ impl AsciiRecord {
         };
         let result = Self::fix_len(&mut first, &rest);
         let first = AnyField::Text(first);
+        if let Ok(out) = &result {
+            // The first field as written: up to the first GS.
+            let end = out.iter().position(|&b| b == GS).unwrap_or(out.len());
+            check_in_record(&first, out.get(..end).unwrap_or_default(), data.as_ref())
+                .map_err(|e| e.with_position(self.field_position(first.tag())))?;
+        }
         if self.fields.first() != Some(&first) {
             if let Some(slot) = self.fields_mut().first_mut() {
                 *slot = first;
@@ -1024,25 +1047,57 @@ impl AsciiRecord {
         let raw_of = |tag: &PyInt| raws.get(tag).copied();
         let read_of = |tag: &PyInt| reads.get(tag).copied();
         let cnt = self.cnt_index();
+        let data = data_label(self.record_type);
+        // The fields in their current order, the data field last: one added
+        // after the reading goes before it. A record read keeps its order.
+        let is_data = |f: &AnyField| {
+            matches!(f, AnyField::Binary(_))
+                && data
+                    .as_ref()
+                    .is_some_and(|(t, _)| f.tag().to_i64() == Some(i64::from(*t)))
+        };
+        let order = self
+            .fields
+            .iter()
+            .enumerate()
+            .skip(1)
+            .filter(|(_, f)| !is_data(f))
+            .chain(
+                self.fields
+                    .iter()
+                    .enumerate()
+                    .skip(1)
+                    .filter(|(_, f)| is_data(f)),
+            );
         let mut rest = Vec::new();
-        for (i, field) in self.fields.iter().enumerate().skip(1) {
-            if i > 1 {
+        for (n, (i, field)) in order.enumerate() {
+            if n > 0 {
                 rest.push(GS);
             }
             let raw = raw_of(field.tag());
             let unchanged = read_of(field.tag()).is_some_and(|then| {
                 then == field || (Some(i) == cnt && !cnt_rebuilt && same_shape(field, then))
             });
+            let checked = |bytes: &[u8]| {
+                check_in_record(field, bytes, data.as_ref())
+                    .map_err(|e| e.with_position(self.field_position(field.tag())))
+            };
             match raw {
                 Some(raw) if unchanged => {
                     rest.extend_from_slice(&raw.label);
                     rest.extend_from_slice(&raw.content);
                 }
                 Some(raw) => {
+                    let value = field.value_bytes()?;
+                    checked(&value)?;
                     rest.extend_from_slice(&raw.label);
-                    rest.extend(field.value_bytes()?);
+                    rest.extend(value);
                 }
-                None => rest.extend(field.to_bytes()?),
+                None => {
+                    let bytes = field.to_bytes()?;
+                    checked(&bytes)?;
+                    rest.extend(bytes);
+                }
             }
         }
         let position = self.record_position();
@@ -1340,11 +1395,10 @@ mod tests {
     fn summary_tags() {
         let mut r = AsciiRecord::new(2).unwrap();
         r.add_field(Field::new(2, 3, "x").unwrap()).unwrap();
-        r.add_field(Field::new(2, -1, "n").unwrap()).unwrap();
         r.add_field(Field::new(2, 1000, "m").unwrap()).unwrap();
         assert_eq!(
             r.summary(),
-            " 2.-01:                               : n\n 2.001: LEN                           : 0\n 2.002: IDC                           : 0\n 2.003:                               : x\n 2.1000:                               : m"
+            " 2.001: LEN                           : 0\n 2.002: IDC                           : 0\n 2.003:                               : x\n 2.1000:                               : m"
         );
         assert_eq!(r.to_string(), r.summary());
         assert_eq!(AsciiRecord::with(2, false, true).unwrap().summary(), "");

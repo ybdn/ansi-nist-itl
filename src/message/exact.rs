@@ -3,7 +3,7 @@
 
 use std::borrow::Cow;
 
-use super::{Message, rebuild_cnt};
+use super::{Message, at_record, check_binary_type, check_idcs, rebuild_cnt};
 use crate::error::Result;
 use crate::record::Record;
 use crate::value::Value;
@@ -70,6 +70,7 @@ impl Message {
         let rebuilt = if same_layout {
             None
         } else {
+            check_idcs(&self.records)?;
             let mut first = self.records.first().cloned();
             if let Some(first) = &mut first {
                 rebuild_cnt(first, self.records.get(1..).unwrap_or_default())?;
@@ -77,10 +78,12 @@ impl Message {
             first
         };
         let record_bytes = |i: usize, r: &Record| -> Result<Vec<u8>> {
+            check_binary_type(r).map_err(at_record(i))?;
             match (&rebuilt, i) {
                 (Some(first), 0) => first.exact_bytes(true),
                 _ => r.exact_bytes(false),
             }
+            .map_err(at_record(i))
         };
 
         if same_layout && self.records.iter().all(|r| !r.segments().is_empty()) {

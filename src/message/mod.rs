@@ -11,8 +11,8 @@ pub use parse::{ParseOptions, Parsed};
 use crate::alias;
 use crate::bytes::Bytes;
 use crate::defaults::Defaults;
-use crate::error::{Error, Position, Result};
-use crate::field::{AnyField, Field};
+use crate::error::{Error, ErrorKind, Position, Result};
+use crate::field::{AnyField, Field, no_separator};
 use crate::py::py_int;
 use crate::record::{AsciiRecord, Record};
 use crate::subfield::SubField;
@@ -577,9 +577,11 @@ impl Message {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn to_bytes(&mut self) -> Result<Vec<u8>> {
+        check_idcs(&self.records)?;
         self.cnt()?;
         let mut out = Vec::new();
         for (i, r) in self.records.iter_mut().enumerate() {
+            check_binary_type(r).map_err(at_record(i))?;
             out.extend(r.to_bytes().map_err(at_record(i))?);
         }
         Ok(out)
@@ -672,6 +674,48 @@ pub(crate) fn rebuild_cnt<'a>(first: &'a mut Record, rest: &[Record]) -> Result<
         .map_err(at_record(i + 1))?;
     }
     Ok(field)
+}
+
+/// A binary record of a type other than 3 to 8, which the reading would
+/// take for a tagged one: refused by both writings.
+pub(crate) fn check_binary_type(r: &Record) -> Result<()> {
+    match r {
+        Record::Binary(b) if !(3..=8).contains(&b.record_type()) => {
+            let message = format!(
+                "a binary record of type {} cannot be written: only Types 3 to 8 are binary",
+                b.record_type()
+            );
+            Err(
+                Error::new(ErrorKind::TypeMismatch, message).with_position(Position {
+                    record_type: Some(b.record_type()),
+                    ..Position::default()
+                }),
+            )
+        }
+        _ => Ok(()),
+    }
+}
+
+/// An IDC holding a separator, which the CNT of the Type-1 copies: the error
+/// names the IDC, not the CNT that would be written first.
+pub(crate) fn check_idcs(records: &[Record]) -> Result<()> {
+    for (i, r) in records.iter().enumerate().skip(1) {
+        let Some(a) = r.as_ascii() else { continue };
+        let Some(field) = a.fields().iter().find(|f| f.alias() == alias::IDC) else {
+            continue;
+        };
+        if let AnyField::Text(f) = field {
+            no_separator(f.value().to_string().as_bytes()).map_err(|e| {
+                e.with_position(Position {
+                    record_index: Some(i),
+                    record_type: Some(r.record_type()),
+                    tag: Some(f.tag().clone()),
+                    ..Position::default()
+                })
+            })?;
+        }
+    }
+    Ok(())
 }
 
 fn cnt_position() -> Position {

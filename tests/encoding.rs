@@ -246,9 +246,24 @@ proptest! {
     }
 
     #[test]
-    fn latin1_is_the_identity(text in "[\\x00-\\x01\\x03-\\u{ff}]*") {
+    fn latin1_is_the_identity(text in "[\\x00-\\x01\\x03-\\x1b\\x20-\\u{ff}]*") {
         prop_assert_eq!(encode(&text, CharacterEncoding::Latin1).unwrap(), text.clone());
         prop_assert_eq!(decode(&text, CharacterEncoding::Latin1).unwrap(), text);
+    }
+
+    /// A separator (0x1C to 0x1F) is refused in every encoding: the parser
+    /// would cut the text there.
+    #[test]
+    fn separators_are_refused(
+        before in "[a-z]*",
+        separator in 0x1Cu8..=0x1F,
+        after in "[a-z]*",
+    ) {
+        let text = format!("{before}{}{after}", char::from(separator));
+        for encoding in [CharacterEncoding::Ascii, CharacterEncoding::Latin1, CharacterEncoding::Utf8] {
+            let err = encode(&text, encoding).unwrap_err();
+            prop_assert_eq!(err.kind(), &ErrorKind::Encoding);
+        }
     }
 
     /// Any Latin-1 view decodes or fails, without panic.
