@@ -316,10 +316,14 @@ fn content() {
 }
 
 /// The findings on field `t.tag` of a record of type `t` holding `value`.
-fn on_field(t: u32, tag: u32, value: Vec<Vec<&str>>) -> Vec<String> {
+fn on_field<S: AsRef<str>>(t: u32, tag: u32, value: Vec<Vec<S>>) -> Vec<String> {
     let mut msg = conformant();
     let mut r = AsciiRecord::new(t).unwrap();
     r.set("IDC", 9).unwrap();
+    let value: Vec<Vec<&str>> = value
+        .iter()
+        .map(|sf| sf.iter().map(AsRef::as_ref).collect())
+        .collect();
     r.add_field(Field::new(t, tag, value).unwrap()).unwrap();
     msg.push(r).unwrap();
     let prefix = format!("{t}.{tag:03}");
@@ -333,7 +337,7 @@ fn on_field(t: u32, tag: u32, value: Vec<Vec<&str>>) -> Vec<String> {
 }
 
 /// Section 7.7.12.2: after NOP, HPO and VPO repeat as pairs, NOP times
-/// (14.025 ASEG, Table 76; 10.033 FEC; 20.016 SEG without points).
+/// (14.025 ASEG, Table 104; 10.033 FEC; 20.016 SEG without points).
 #[test]
 fn points_repeat_as_pairs() {
     let three = vec!["2", "3", "10", "10", "20", "10", "20", "20"];
@@ -343,6 +347,15 @@ fn points_repeat_as_pairs() {
     assert_eq!(
         on_field(20, 16, vec![vec!["1", "0", ""]]),
         Vec::<String>::new()
+    );
+    // NOP and the pairs are absent together.
+    assert_eq!(
+        on_field(
+            20,
+            16,
+            vec![vec!["1", "0", "", "1", "1", "2", "2", "3", "3"]]
+        ),
+        ["20.016 subfield 1: NOP is empty, 3 points follow"]
     );
     assert_eq!(
         on_field(
@@ -372,22 +385,53 @@ fn points_repeat_as_pairs() {
 }
 
 /// Section 7.7.12.1 and its note 71: an EFS path is one item
-/// `x1,y1-x2,y2-…`, a closed path of at least 3 vertices (9.300 ROI).
+/// `x1,y1-x2,y2-…`, each vertex "an (X,Y) pair of non-negative integers"; a
+/// closed path (9.300 ROI) has at least 3 vertices.
 #[test]
 fn efs_path_in_one_item() {
-    let roi = |rop| vec![vec!["983", "983", "75", "100", rop]];
-    assert_eq!(on_field(9, 300, roi("0,0-0,1-0,12")), Vec::<String>::new());
+    let roi = |rop: &str| {
+        vec![vec![
+            "983".to_string(),
+            "983".into(),
+            "75".into(),
+            "100".into(),
+            rop.into(),
+        ]]
+    };
     assert_eq!(
-        on_field(9, 300, roi("0,0-0,1")),
+        on_field(9, 300, roi("0,0-100,0-0,100")),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        on_field(9, 300, roi("0,0-100,0")),
         ["9.300 subfield 1 item 5: 2 vertices, at least 3 expected"]
     );
+    for vertex in ["7", "1,2,3", "1.5,2", "+3,2", "1 ,2", "1,"] {
+        let rop = format!("0,0-100,0-{vertex}");
+        assert_eq!(
+            on_field(9, 300, roi(&rop)),
+            [format!(
+                "9.300 subfield 1 item 5: vertex {vertex:?} is not x,y, two non-negative integers"
+            )]
+        );
+    }
     assert_eq!(
-        on_field(9, 300, roi("0,0-0,1-7")),
-        ["9.300 subfield 1 item 5: vertex \"7\" is not x,y"]
+        on_field(9, 300, roi("0,0-100,0-0,123456")),
+        ["9.300 subfield 1 item 5: 6 characters, at most 5 expected"]
+    );
+}
+
+/// Section 7.7.12.1 and Table 42, note 115: 9.373 RPS is the open path of the
+/// EFS, at least 2 vertices, each coordinate up to 5 characters.
+#[test]
+fn efs_open_path() {
+    assert_eq!(
+        on_field(9, 373, vec![vec!["0,0-10,10"]]),
+        Vec::<String>::new()
     );
     assert_eq!(
-        on_field(9, 300, roi("0,0-0,1-0,123456")),
-        ["9.300 subfield 1 item 5: 6 characters, at most 5 expected"]
+        on_field(9, 373, vec![vec!["0,0"]]),
+        ["9.373 subfield 1: 1 vertices, at least 2 expected"]
     );
 }
 
@@ -405,11 +449,19 @@ fn lists_in_one_item() {
     );
 }
 
-/// 18.018: "user-defined information items (there may be multiple items)".
+/// 18.018: "user-defined information items (there may be multiple items)":
+/// any number, any content, but each item present (M↑).
 #[test]
-fn user_defined_items_are_free() {
-    let udp = vec![vec!["", ""], vec!["", ""]];
+fn user_defined_items_are_free_but_present() {
+    let udp = vec![vec!["a", "b", "c"], vec!["d"]];
     assert_eq!(on_field(18, 18, udp), Vec::<String>::new());
+    let name = "user-defined information items (there may be multiple items)";
+    assert_eq!(
+        on_field(18, 18, vec![vec![""]]),
+        [format!(
+            "18.018 subfield 1 item 1: mandatory item {name} is empty"
+        )]
+    );
 }
 
 /// 10.011: a value of Table 19 except WSQ20 (note 151), so `JP2` and `JP2L`.

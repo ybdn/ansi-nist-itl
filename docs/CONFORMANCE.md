@@ -54,10 +54,10 @@ Binary records: only LEN and IDC are read, the rest is the raw value
 
 | Level | Checked | Rule (`validation::Rule`) |
 |-------|---------|---------------------------|
-| Structure | Record type defined by the edition; field number defined, reserved or deprecated; single value against subfields and items; number of subfields; number of items; repeated items: HPO and VPO pairs after NOP (section 7.7.12.2), Type-9 EFS paths `x,y-x,y` in one item, at least 3 vertices (section 7.7.12.1), lists `a\|b` in one item (section 7.7.13) | `RecordType`, `UndefinedField`, `ReservedField`, `DeprecatedField`, `Structure`, `SubfieldCount`, `ItemCount` |
+| Structure | Record type defined by the edition; field number defined, reserved or deprecated; single value against subfields and items; number of subfields; number of items; repeated items: HPO and VPO pairs after NOP (section 7.7.12.2), Type-9 EFS paths `x,y-x,y` in one item, each vertex two non-negative integers, at least 3 vertices for the closed paths and 2 for 9.373 RPS, at most 99 (sections 7.7.12 and 7.7.12.1), lists `a\|b` in one item (section 7.7.13) | `RecordType`, `UndefinedField`, `ReservedField`, `DeprecatedField`, `Structure`, `SubfieldCount`, `ItemCount` |
 | Dictionary | Mandatory fields and items, character type, size, dates (`YYYYMMDD`, `YYYYMMDDhhmmss`, GMT) | `MissingField`, `MissingItem`, `CharacterType`, `Size`, `Date` |
 | Message | Type-1 in 7-bit ASCII; CNT lists the records of the message | `Type1Ascii`, `Content` |
-| Conditional rules | **Not checked**: the dependent conditions (`D`) of the tables, except that Type-9 field blocks are mandatory only when used and that NOP gives the number of HPO VPO pairs | `src/validation/mod.rs` module documentation; `block_in_use` |
+| Conditional rules | **Not checked**: the dependent conditions (`D`) of the tables, except that Type-9 field blocks are mandatory only when used, and that NOP and the HPO VPO pairs are absent together or NOP gives their number | `src/validation/mod.rs` module documentation; `block_in_use` |
 | Value constraints | **Not checked**: value ranges and code lists of the tables | idem |
 
 Sizes are counted in bytes, since the crate reads text one byte per character
@@ -66,9 +66,14 @@ any printable ASCII character (`allowed`). Versions without tables get a
 `Version` warning and only the CNT check.
 
 Evidence: `tests/validation.rs` (`points_repeat_as_pairs`, `efs_path_in_one_item`,
-`lists_in_one_item`, `user_defined_items_are_free`, `face_compression_jpeg_2000`
-among others), `tests/dictionary.rs`, unit tests in `src/validation/mod.rs`.
-User-defined items (18.018: "there may be multiple items") are not checked.
+`efs_open_path`, `lists_in_one_item`, `user_defined_items_are_free_but_present`,
+`face_compression_jpeg_2000` among others), `tests/dictionary.rs`, unit tests in
+`src/validation/mod.rs`. User-defined items (18.018: "there may be multiple items")
+may be any number with any content, but each must be present.
+
+The minimum number of points is the one of each table, which can differ from
+section 7.7.12: 10.033 FEC is an open path, for which the text asks at least 2
+vertices, but its table gives NOP at least 3; the crate follows the table.
 
 ## 3. Character encodings (1.015)
 
@@ -91,13 +96,13 @@ Both are `Message::validate_profile`. National profiles are not planned (PRD LIB
 
 ## 5. Known deviations and limits
 
-1. **Fixed: repeated items were reported as errors** (issue [#97](https://github.com/ybdn/ansi-nist-itl/issues/97)). The validator matched the items of a subfield one to one with the item definitions. It now follows sections 7.7.12 and 7.7.13 (§2); the user-defined items of 18.018 are not checked.
-2. **Fixed: 10.011 CGA was typed `A`.** The Type-10 table of SP 500-290e3 does say `A` (note 150: "Earlier versions had AN"), but note 151 takes the value from Table 19 except `WSQ20`, and Table 19 holds `JP2` and `JP2L`. The dictionary now gives `AN`, as for the other image types (`tools/standard/gen_dictionary.py`, `TYPE_FIXES`). A deviation from the letter of the table, in favour of Table 19.
+1. **Fixed: repeated items were reported as errors** (issue [#97](https://github.com/ybdn/ansi-nist-itl/issues/97)). The validator matched the items of a subfield one to one with the item definitions. It now follows sections 7.7.12 and 7.7.13 (§2), 9.373 RPS included; the user-defined items of 18.018 are free in number and content.
+2. **Fixed: 10.011 CGA was typed `A`.** The Type-10 table of SP 500-290e3 does say `A` (note 150: "Earlier versions had AN"), but note 151 takes the value from Table 19 except `WSQ20`, and Table 19 holds `JP2` and `JP2L`. Annex E.6.1.2 also requires JPEG 2000 for facial images at SAP levels 40 and above. The dictionary now gives `AN`, as for the other image types (`tools/standard/gen_dictionary.py`, `TYPE_FIXES`): a deviation from the letter of the table, in favour of Table 19. Consequence: since the crate does not check code lists (item 7), `WSQ20`, the value note 150 meant to exclude, is now accepted in 10.011.
 3. **Versions `0500` and `0501` use the Update 2015 tables.** On the public files of §6, 21.005 (`ACD`, a date in a `0500` file, a date and time in the 2015 table) is reported. Whether this is an edition difference or a defect: **not verified**. (The findings on 10.049, 11.012, 11.035, 11.037 and 12.011 that this item listed before came from item 1: they were lists of section 7.7.13.)
 4. **Field numbers above 999.** BioCTS gives `pass-type-1-long-fieldnumber.an2` (field 2.999999999) as conformant; the validation reports `UndefinedField`. Whether the 2015 tables allow it: **not verified**.
 5. **Fields after the data field (999)** are read as part of the data; the tolerant mode reports a `DataNotLast` warning (`src/error.rs`). Five NBIS files of §6 have this layout.
 6. **Binary records (Types 3 to 8)**: header values (IMP, FGP, ISR, HLL, VLL, GCA) are not validated (§2).
-7. **Not checked**: dependent conditions, value ranges and code lists, content of user-defined fields (§2).
+7. **Not checked**: dependent conditions, value ranges and code lists, content of user-defined fields (§2), and that two vertices of a path differ (section 7.7.12).
 8. **Not supported**: XML/NIEM, Annex B.1.8 switch sequences, editions after Update 2015.
 9. **Portability**: CI runs on Linux and macOS (`test-macos`); Windows has a manual job (`.github/workflows/ci.yml`).
 10. **Tag format width at most 1024** (`MAX_WIDTH`, `src/py/format.rs`): a `%[0][width]d` conversion wider than that, accepted before up to about 10^8 characters, is refused with `ErrorKind::BadFormat`.
@@ -128,7 +133,7 @@ see below); NBIS 1 × `0200`, 17 × `0201`, 3 × `0400`.
 | Strict reading | 105 accepted, 3 refused | 21 accepted |
 | Tolerant reading | 108 read; 1 diagnostic on each refused file, none on the others | 21 read; `DataNotLast` warnings on 5 files (§5, item 5) |
 | Exact rewrite, byte for byte | 105 of 105 | 21 of 21 |
-| `validate()` without error | 87 of 105 (65 before the fixes of §5 items 1 and 2) | 21 of 21 (no tables for these versions: CNT only) |
+| `validate()` without error | 83 of 105 (65 before the fixes of §5 items 1 and 2) | 21 of 21 (no tables for these versions: CNT only) |
 | EBTS 11.2 / INT-I 5.03 without error | 0 / 0 (none is an EBTS or INT-I transaction) | 0 / 0 |
 
 The 3 refused files are BioCTS negative samples, refused for the reason their
@@ -140,13 +145,13 @@ On the 105 files read:
 
 | | Valid for the crate | Invalid for the crate |
 |--|--|--|
-| `pass-*` (80) | 78 (60 before) | 2 (20 before) |
+| `pass-*` (80) | 74 (60 before) | 6 (20 before) |
 | `fail-*` (24) | 8 (5 before) | 16 (19 before) |
 | other (1, `warning-ctrl-characters-`) | 1 (0 before) | 0 (1 before) |
 
 - "Before": `origin/develop` at `2b5fc8e`; "after": with the fixes of §5 items 1 and 2. Same files, same command.
-- The 2 `pass-*` files still reported invalid fall under the open questions of §5: `pass-type-17-21` (21.005, item 3) and `pass-type-1-long-fieldnumber` (item 4). Before the fixes, 18 more were reported, all for repeated items or 10.011.
-- The 8 `fail-*` files reported valid break rules the crate does not check: `fail-deprecated-records` (Types 3, 5, 6: the crate only warns), `fail-type-4-L1`, `fail-type-4-L2` (binary header values), `fail-type-10-face-L2`, `fail-type-13-L2`, and, since the fixes, `fail-type-10-face-smt-combined-L2`, `fail-type-14-L2`, `fail-type-17-L2`: their only findings before were false ones on repeated items (L2 rules of BioCTS: which rule each breaks is **not verified**).
+- The 6 `pass-*` files still reported invalid: `pass-type-17-21` (21.005, §5 item 3), `pass-type-1-long-fieldnumber` (item 4), and four files whose 18.018 items are empty (`pass-type-18-FSA` and `pass-all-supported-types`, in both the 2011 and the 2013 sample data). The table gives these items `M↑`: the crate reports an empty one, BioCTS accepts it; which reading is right: **not verified**. Before the fixes, 14 more were reported, all for repeated items or 10.011.
+- The 8 `fail-*` files reported valid break rules the crate does not check: `fail-deprecated-records` (Types 3, 5, 6: the crate only warns), `fail-type-4-L1`, `fail-type-4-L2` (binary header values), `fail-type-10-face-L2`, `fail-type-13-L2`, and, since the fixes, `fail-type-10-face-smt-combined-L2`, `fail-type-14-L2`, `fail-type-17-L2`, whose only findings before were false ones on repeated items. Compared with their `pass-*` counterparts, these three repeat a vertex (10.033, 14.025: "No two vertices shall occupy the same position", section 7.7.12) or put a point past the image (17.034, a value constraint), among other changes. Which rule BioCTS reports for each: **not verified**.
 - That a `fail-*` file reported invalid is reported for the reason BioCTS intends: **not verified** file by file.
 
 ### Replay

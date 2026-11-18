@@ -134,7 +134,8 @@ class Problem(Exception):
     pass
 
 
-# Character types the tables leave as "encoding specific", from the text.
+# Character types from the text, where a table leaves them "encoding specific"
+# or contradicts another table.
 TYPE_FIXES = {
     # 8.18.13 and 8.18.14: "date and time ... See Section 7.7.2.2".
     "18.013": "Gmt",

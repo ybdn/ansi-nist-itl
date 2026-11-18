@@ -17,7 +17,7 @@ exclude = ["/fuzz", "/tools", "/docs", "/.github"]
 all-features = true
 
 [dependencies]
-jiff = { version = "0.2", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo", "tzdb-bundle-platform"], optional = true }
+jiff = { version = "0.2", default-features = false, features = ["tz-system", "tzdb-zoneinfo", "tzdb-concatenated", "tzdb-bundle-platform"], optional = true }
 serde = { version = "1.0.200", features = ["derive"], optional = true }
 
 [dev-dependencies]

@@ -8,9 +8,11 @@
 //! 5.6), and CNT (1.003) lists the records of the message (section 7.3.1).
 //!
 //! Items that occur more than once follow sections 7.7.12 and 7.7.13: HPO
-//! and VPO repeat as pairs after NOP, as many as NOP says; a Type-9 EFS path
-//! is one item `x1,y1-x2,y2-…` of at least 3 vertices; a list of Types 10 to
-//! 12 is one item `a|b|c`.
+//! and VPO repeat as pairs after NOP, which is absent with them or gives their
+//! number; a Type-9 EFS path is one item `x1,y1-x2,y2-…` of non-negative
+//! integers, at least 3 vertices (2 for 9.373 RPS, the open path); a list of
+//! Types 10 to 12 is one item `a|b|c`; user-defined items (18.018) may be any
+//! number, each present.
 //!
 //! Not checked: the other dependent conditions (`D`), the value constraints
 //! of the tables (ranges, code lists), and the content of user-defined
@@ -596,18 +598,28 @@ impl Validator {
     fn subfield(&mut self, group: &SubfieldGroup, items: &[String], here: Here) {
         if let Some(format) = group.value {
             match items {
+                // 9.373 RPS: the one open path of the EFS, at least 2 vertices
+                // (section 7.7.12.1; Table 42, note 115).
+                [one] if here.record_type == 9 && here.tag == Some(373) => {
+                    self.path(one, format, 2, 99, here);
+                }
                 [one] => self.value(one, format, Condition::Mandatory, here),
                 _ => self.error(Rule::Structure, here, "expected a single value".into()),
             }
             return;
         }
         // 18.018: "user-defined information items (there may be multiple items)":
-        // neither their number nor their content is checked.
+        // any number, any content, but each one present (M↑).
         if group
             .items
             .iter()
             .all(|d| d.format.char_type == CharType::UserDefined)
         {
+            if let Some(def) = group.items.first() {
+                for (i, text) in items.iter().enumerate() {
+                    self.item(def, Some(text), here.item(i));
+                }
+            }
             return;
         }
         // Section 7.7.12.2: after NOP, the items HPO and VPO repeat as pairs, one
@@ -659,39 +671,60 @@ impl Validator {
         }
     }
 
-    /// An item holding several values. Section 7.7.12.1 (Type-9 EFS paths): one
-    /// item `x1,y1-x2,y2-…`, the vertices of a closed path, at least 3. Section
-    /// 7.7.13 (lists, Types 10 to 12): one item `a|b|c`. The occurrence of the
-    /// item counts the vertices or the values.
+    /// An item holding several values. Section 7.7.12.1 (Type-9 EFS paths):
+    /// one item `x1,y1-x2,y2-…`, the vertices of a closed path, at least 3.
+    /// Section 7.7.13 (lists, Types 10 to 12): one item `a|b|c`. The
+    /// occurrence of the item counts the vertices or the values.
     fn list(&mut self, def: &ItemDef, text: &str, here: Here) {
-        let path = here.record_type == 9;
-        let values: Vec<&str> = text.split(if path { '-' } else { '|' }).collect();
-        let (n, what) = (values.len(), if path { "vertices" } else { "values" });
         let min = match def.occurrence.min {
-            Limit::Count(m) if path => m.max(3),
-            Limit::Count(m) => m,
+            Limit::Count(m) => m as usize,
             _ => 0,
         };
-        if n < min as usize {
+        let max = match def.occurrence.max {
+            Limit::Count(m) => m as usize,
+            _ => usize::MAX,
+        };
+        if here.record_type == 9 {
+            self.path(text, def.format, min.max(3), max, here);
+            return;
+        }
+        let values: Vec<&str> = text.split('|').collect();
+        self.count(values.len(), "values", min, max, here);
+        for v in values {
+            self.value(v, def.format, Condition::Mandatory, here);
+        }
+    }
+
+    /// A Type-9 EFS path in one item (section 7.7.12.1 and its note 71):
+    /// `x1,y1-x2,y2-…`, each vertex "an (X,Y) pair of non-negative integers",
+    /// each integer of `format`.
+    fn path(&mut self, text: &str, format: Format, min: usize, max: usize, here: Here) {
+        let vertices: Vec<&str> = text.split('-').collect();
+        self.count(vertices.len(), "vertices", min, max, here);
+        let integer = |t: &str| !t.is_empty() && t.bytes().all(|b| b.is_ascii_digit());
+        for v in vertices {
+            match v.split(',').collect::<Vec<_>>().as_slice() {
+                [x, y] if integer(x) && integer(y) => {
+                    self.value(x, format, Condition::Mandatory, here);
+                    self.value(y, format, Condition::Mandatory, here);
+                }
+                _ => {
+                    let message = format!("vertex {v:?} is not x,y, two non-negative integers");
+                    self.error(Rule::Structure, here, message);
+                }
+            }
+        }
+    }
+
+    /// `n` vertices or values, between `min` and `max`.
+    fn count(&mut self, n: usize, what: &str, min: usize, max: usize, here: Here) {
+        if n < min {
             let message = format!("{n} {what}, at least {min} expected");
             self.error(Rule::ItemCount, here, message);
         }
-        if let Limit::Count(max) = def.occurrence.max {
-            if n > max as usize {
-                let message = format!("{n} {what}, at most {max} expected");
-                self.error(Rule::ItemCount, here, message);
-            }
-        }
-        for v in values {
-            if !path {
-                self.value(v, def.format, Condition::Mandatory, here);
-            } else if let Some((x, y)) = v.split_once(',') {
-                self.value(x, def.format, Condition::Mandatory, here);
-                self.value(y, def.format, Condition::Mandatory, here);
-            } else {
-                let message = format!("vertex {v:?} is not x,y");
-                self.error(Rule::Structure, here, message);
-            }
+        if n > max {
+            let message = format!("{n} {what}, at most {max} expected");
+            self.error(Rule::ItemCount, here, message);
         }
     }
 
@@ -714,12 +747,29 @@ impl Validator {
                 self.error(Rule::ItemCount, here, message);
             }
         }
-        let nop = fixed.iter().position(|d| d.mnemonic == "NOP");
-        if let Some(nop) = nop.and_then(|i| items.get(i)?.parse::<usize>().ok()) {
-            if nop != points {
-                let message = format!("NOP is {nop}, {points} points follow");
+        // NOP and the pairs are absent together, or NOP counts the pairs.
+        let Some(i) = fixed.iter().position(|d| d.mnemonic == "NOP") else {
+            return;
+        };
+        match items.get(i).filter(|t| !t.is_empty()) {
+            Some(text) => {
+                if let Ok(nop) = text.parse::<usize>() {
+                    if nop != points {
+                        let message = format!("NOP is {nop}, {points} points follow");
+                        self.error(Rule::ItemCount, here, message);
+                    }
+                }
+            }
+            // A mandatory NOP is already reported as a missing item.
+            None if points > 0
+                && fixed
+                    .get(i)
+                    .is_some_and(|d| d.condition != Condition::Mandatory) =>
+            {
+                let message = format!("NOP is empty, {points} points follow");
                 self.error(Rule::ItemCount, here, message);
             }
+            None => {}
         }
     }
 
