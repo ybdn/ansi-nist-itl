@@ -11,6 +11,8 @@ All notable changes to this crate are documented here. The format follows
 - `encoding::decode` and `encoding::encode` support UTF-16 and UTF-32 (LIB-18, #85). Reading honours a byte order mark and defaults to big-endian; writing is big-endian without a mark. Malformed input (odd length, unpaired surrogate, invalid scalar value) gives `ErrorKind::Decoding`; a character whose encoded bytes include a separator (`0x1C` to `0x1F`) gives `ErrorKind::Encoding`. In these two encodings byte `0x02` is data, not an `STX` switch sequence. `nistitl` 0.6 has no such decoding, so the default parsing is unchanged.
 - Fuzz target `encoding`, run by the CI and the scheduled workflow.
 - `docs/CONFORMANCE.md`: conformance statement (versions, record types, validation levels, encodings, profiles, known deviations) with results on the public NIST BioCTS and NBIS sample files. `tests/conformance.rs` checks every record type and reports on a corpus named by `ANSI_NIST_ITL_CORPUS`.
+- Fuzz target `serde`: a message deserialized from any JSON, then written, summarized and validated.
+- Lint policy in `src/lib.rs`: `unwrap`, `expect`, `panic!`, `unreachable!`, `todo!`, `unimplemented!` and unchecked indexing or slicing are denied outside the tests.
 
 ### Changed
 
@@ -20,6 +22,10 @@ All notable changes to this crate are documented here. The format follows
 - Release workflow: a version already on crates.io is not published again and an existing GitHub release is kept, so a missing tag can be pushed afterwards.
 - Repository links point to `ybdn/ansi-nist-itl` (`Cargo.toml`, README, `SECURITY.md`, issue templates) instead of the former `ybdn-ei/ansi-nist-itl`, which only redirected.
 - Community: `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1); the issue templates declare `title` and `assignees`.
+
+### Fixed
+
+- A tag format with a huge width (`"%d.%099999999999d:"`), given to `Field::with`, `BinaryField::with` or a deserialized field, was accepted and then aborted the process or panicked (capacity overflow) when the field was written. The width of a conversion is now at most 1024; a larger one is rejected as an unsupported tag format (`ErrorKind::BadFormat`).
 
 ## [1.0.2] - 2026-11-10
 
