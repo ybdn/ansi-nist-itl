@@ -233,7 +233,8 @@ fn decode_utf16(bytes: &[u8]) -> Result<String> {
         ));
     }
     let units = bytes.chunks_exact(2).map(|c| {
-        let pair = [c[0], c[1]];
+        // `chunks_exact(2)`: always two bytes.
+        let pair = c.try_into().unwrap_or_default();
         if little {
             u16::from_le_bytes(pair)
         } else {
@@ -268,7 +269,8 @@ fn decode_utf32(bytes: &[u8]) -> Result<String> {
     bytes
         .chunks_exact(4)
         .map(|c| {
-            let quad = [c[0], c[1], c[2], c[3]];
+            // `chunks_exact(4)`: always four bytes.
+            let quad = c.try_into().unwrap_or_default();
             let n = if little {
                 u32::from_le_bytes(quad)
             } else {

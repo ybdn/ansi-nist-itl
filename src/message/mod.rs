@@ -337,7 +337,10 @@ impl Message {
     /// ```
     pub fn by_key(&self, record_type: u32, idc: impl Into<Scalar>) -> Result<&Record> {
         let index = self.find(record_type, &idc.into())?;
-        Ok(&self.records[index])
+        // `find` gives the index of a record.
+        self.records
+            .get(index)
+            .ok_or_else(Error::index_out_of_range)
     }
 
     /// [`Message::by_key`], mutable.
@@ -353,7 +356,9 @@ impl Message {
     /// ```
     pub fn by_key_mut(&mut self, record_type: u32, idc: impl Into<Scalar>) -> Result<&mut Record> {
         let index = self.find(record_type, &idc.into())?;
-        Ok(&mut self.records[index])
+        self.records
+            .get_mut(index)
+            .ok_or_else(Error::index_out_of_range)
     }
 
     /// Index of the first record matching `(t, idc)`, `None` if there is none.
