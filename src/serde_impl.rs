@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::bytes::Bytes;
 use crate::field::{AnyField, BinaryField, DEFAULT_FORMAT, Field};
 use crate::message::Message;
-use crate::record::{AsciiRecord, BinaryRecord, Record};
+use crate::record::{AsciiRecord, BinaryRecord, FieldIndex, Record};
 use crate::subfield::SubField;
 use crate::value::{Item, Kind, ListElem, MAX_ITEM_DEPTH, PyInt, Scalar, SubValue, Value};
 
@@ -705,8 +705,11 @@ impl RecordIn {
             Some(fields) => {
                 let autosort = self.autosort.unwrap_or(true);
                 let mut r = AsciiRecord::with(t, false, autosort).map_err(E::custom)?;
+                // `add_field`, in constant time per field.
+                let mut index = FieldIndex::default();
                 for field in fields {
-                    r.add_field(field.build::<E>(Some(t))?).map_err(E::custom)?;
+                    r.add_field_indexed(field.build::<E>(Some(t))?, &mut index)
+                        .map_err(E::custom)?;
                 }
                 Ok(Record::Ascii(r))
             }

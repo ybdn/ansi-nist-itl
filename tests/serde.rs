@@ -342,3 +342,32 @@ fn deeply_nested_items_are_refused() {
     .to_string();
     assert!(err.contains("nested more than 128 levels"), "{err}");
 }
+
+/// Deserializing a record added each field with `add_field`, which checks
+/// it against all the previous ones: quadratic in the number of fields.
+#[test]
+fn deserializing_a_record_is_linear() {
+    let record = |n: usize| {
+        let mut fields = vec![
+            json!({ "tag": 1, "value": 0 }),
+            json!({ "tag": 2, "value": 0 }),
+        ];
+        fields.extend((3..n + 3).map(|tag| json!({ "tag": tag, "value": "v" })));
+        serde_json::to_string(&json!({ "type": 2, "fields": fields })).unwrap()
+    };
+    let best_time = |text: &str| {
+        (0..3)
+            .map(|_| {
+                let start = std::time::Instant::now();
+                serde_json::from_str::<AsciiRecord>(text).unwrap();
+                start.elapsed().as_secs_f64()
+            })
+            .fold(f64::MAX, f64::min)
+    };
+    // About 4 when linear, 16 when quadratic.
+    let ratio = best_time(&record(20_000)) / best_time(&record(5_000));
+    assert!(
+        ratio < 10.0,
+        "4 times the fields take {ratio:.1} times as long"
+    );
+}

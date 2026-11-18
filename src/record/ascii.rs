@@ -391,6 +391,12 @@ impl AsciiRecord {
     ///
     /// Returns the record, so that calls can be chained.
     ///
+    /// Complexity: the fields already there are scanned, so each call takes
+    /// a time linear in their number, and adding N fields one call at a time
+    /// takes a time proportional to N². Reading a record with
+    /// [`Message::parse`](crate::Message::parse) or deserializing it is
+    /// linear.
+    ///
     /// ```
     /// use ansi_nist_itl::{AsciiRecord, Field};
     ///
@@ -498,6 +504,12 @@ impl AsciiRecord {
         self.fields_mut().get_mut(i)
     }
 
+    /// The first field whose alias is `alias` (not empty), through `index`.
+    pub(crate) fn alias_indexed(&self, alias: &str, index: &mut FieldIndex) -> Option<&AnyField> {
+        self.sync(index);
+        self.fields.get(*index.aliases.get(alias)?)
+    }
+
     /// [`AsciiRecord::field`] by tag, through `index`.
     pub(crate) fn field_indexed(&self, tag: &PyInt, index: &mut FieldIndex) -> Option<&AnyField> {
         self.sync(index);
@@ -505,7 +517,7 @@ impl AsciiRecord {
     }
 
     /// First field whose tag, or whose non-empty alias, is `key`
-    /// (`record[key]`).
+    /// (`record[key]`). A scan of the fields: linear in their number.
     ///
     /// ```
     /// use ansi_nist_itl::{AsciiRecord, Field, Value};
@@ -592,6 +604,12 @@ impl AsciiRecord {
     ///
     /// A binary field only takes bytes: setting it gives a `TypeMismatch`
     /// error.
+    ///
+    /// Complexity: the fields are scanned, so each call takes
+    /// a time linear in their number, and setting N new fields one call at a time
+    /// takes a time proportional to N². Reading a record with
+    /// [`Message::parse`](crate::Message::parse) or deserializing it is
+    /// linear.
     ///
     /// ```
     /// use ansi_nist_itl::AsciiRecord;
@@ -993,8 +1011,18 @@ impl AsciiRecord {
     /// Type-1 keeps its bytes unless `cnt_rebuilt`.
     pub(crate) fn exact_bytes(&self, cnt_rebuilt: bool) -> Result<Vec<u8>> {
         let origin = self.origin();
-        let raw_of = |tag: &PyInt| origin.and_then(|o| o.raw.iter().rev().find(|r| &r.tag == tag));
-        let read_of = |tag: &PyInt| origin.and_then(|o| o.fields.iter().find(|f| f.tag() == tag));
+        // By tag, built once: a scan per field would be quadratic. The last
+        // bytes read of a tag, and the first field read with it.
+        let mut raws: HashMap<&PyInt, &RawField> = HashMap::new();
+        let mut reads: HashMap<&PyInt, &AnyField> = HashMap::new();
+        if let Some(o) = origin {
+            raws.extend(o.raw.iter().map(|r| (&r.tag, r)));
+            for f in o.fields.iter() {
+                reads.entry(f.tag()).or_insert(f);
+            }
+        }
+        let raw_of = |tag: &PyInt| raws.get(tag).copied();
+        let read_of = |tag: &PyInt| reads.get(tag).copied();
         let cnt = self.cnt_index();
         let mut rest = Vec::new();
         for (i, field) in self.fields.iter().enumerate().skip(1) {

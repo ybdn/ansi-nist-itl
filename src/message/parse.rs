@@ -468,8 +468,12 @@ struct Parser {
     /// For each record, the bytes read and the bytes of its fields
     /// (LIB-12).
     origins: Vec<(Vec<Bytes>, Vec<RawField>)>,
-    /// Fields by tag and alias of the record being read, and its index.
-    field_index: (usize, FieldIndex),
+    /// Fields by tag and alias of the Type-1 (record 0), kept for the
+    /// whole parsing: a Type-1 read again adds to it, and each binary
+    /// record looks up its CNT.
+    type1_fields: FieldIndex,
+    /// Fields by tag and alias of the last other record read, and its index.
+    record_fields: (usize, FieldIndex),
 }
 
 impl Parser {
@@ -487,7 +491,8 @@ impl Parser {
             data_search: None,
             cnt_chars: None,
             origins: vec![(Vec::new(), Vec::new())],
-            field_index: (usize::MAX, FieldIndex::default()),
+            type1_fields: FieldIndex::default(),
+            record_fields: (usize::MAX, FieldIndex::default()),
         };
         // `reset(autocreate=False)`: an empty Type-1.
         parser
@@ -847,11 +852,15 @@ impl Parser {
             return Err(Error::index_out_of_range());
         };
         let record_type = record.record_type();
-        // A Type-1 read again adds to the same record: its index is kept.
-        if self.field_index.0 != index {
-            self.field_index = (index, FieldIndex::default());
-        }
-        let mut parser = TextParser::new(record, &mut self.field_index.1, index, &mut self.notes);
+        let fields = if index == 0 {
+            &mut self.type1_fields
+        } else {
+            if self.record_fields.0 != index {
+                self.record_fields = (index, FieldIndex::default());
+            }
+            &mut self.record_fields.1
+        };
+        let mut parser = TextParser::new(record, fields, index, &mut self.notes);
         let lexed = lex(text, offset, &mut parser);
         let (closed, spans) = (parser.closed, parser.spans);
         if let Err(e) = lexed {
@@ -993,7 +1002,7 @@ impl Parser {
             return Err(Error::index_out_of_range());
         };
         // `record.CNT`: the first field whose alias is CNT.
-        let Some(field) = type1.fields().iter().find(|f| f.alias() == alias::CNT) else {
+        let Some(field) = type1.alias_indexed(alias::CNT, &mut self.type1_fields) else {
             return Err(Error::bad_attribute_get(alias::CNT, 1));
         };
         let field = match field {
