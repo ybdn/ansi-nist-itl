@@ -1,4 +1,4 @@
-//! `%` and `str.format` conversions used by the reference implementation.
+//! `%` and `str.format` conversions used by the crate.
 
 use std::borrow::Cow;
 use std::fmt;
@@ -45,7 +45,7 @@ pub(crate) fn thousands(n: u64) -> String {
 /// A `printf` template applied to `(record, tag)`, like `Field.format` (`'%d.%03d:'`).
 ///
 /// Only literal text, `%%` and exactly two `%[0][width]d` conversions are
-/// supported.
+/// supported, with a width of at most [`MAX_WIDTH`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PrintfTemplate {
     source: Cow<'static, str>,
@@ -57,6 +57,10 @@ enum Part {
     Literal(Cow<'static, str>),
     Int { zero: bool, width: usize },
 }
+
+/// Largest width of a conversion: a label is padded to it when written, so an
+/// unbounded width from the caller or a deserialized field would exhaust memory.
+const MAX_WIDTH: usize = 1024;
 
 /// `'%d.%03d:'`, the default format of a field: given without parsing nor
 /// allocation, as every field read takes it.
@@ -121,6 +125,7 @@ impl PrintfTemplate {
                 width = width
                     .checked_mul(10)
                     .and_then(|w| w.checked_add(d))
+                    .filter(|&w| w <= MAX_WIDTH)
                     .ok_or_else(bad)?;
             }
             if chars.next() != Some('d') {
@@ -201,6 +206,8 @@ mod tests {
         assert_eq!(t.render(&int(1), &int(-2)), "%1-2");
         let t = PrintfTemplate::parse("%0d.%d").unwrap();
         assert_eq!(t.render(&int(1), &int(2)), "1.2");
+        let t = PrintfTemplate::parse("%d.%1024d").unwrap();
+        assert_eq!(t.render(&int(1), &int(2)).len(), 1026);
         let t = PrintfTemplate::parse("é%d.%003d€").unwrap();
         assert_eq!(t.render(&int(1), &int(2)), "é1.002€");
     }
@@ -221,6 +228,8 @@ mod tests {
             "%d%d%",
             "%d.%3",
             "%d.%99999999999999999999999d",
+            "%d.%1025d",
+            "%d.%01000000000000d",
         ] {
             assert_eq!(
                 PrintfTemplate::parse(t),

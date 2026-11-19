@@ -10,7 +10,7 @@ use crate::error::{
 };
 use crate::field::{AnyField, BinaryField, Field};
 use crate::py::{decode_latin1, py_int};
-use crate::record::{AsciiRecord, BinaryRecord, FieldKey, RawField, Record};
+use crate::record::{AsciiRecord, BinaryRecord, FieldIndex, RawField, Record};
 use crate::subfield::SubField;
 use crate::value::{Item, PyInt, Scalar, SubValue};
 use crate::{FS, GS};
@@ -30,7 +30,7 @@ pub struct ParseOptions {
 }
 
 impl ParseOptions {
-    /// The behaviour of the reference implementation: the first error stops the parsing (the
+    /// The first error stops the parsing (the
     /// default, LIB-14).
     ///
     /// ```
@@ -43,8 +43,8 @@ impl ParseOptions {
     }
 
     /// Reads as much as possible (LIB-13): the parsing always succeeds, and
-    /// each error the reference implementation would raise becomes a [`Diagnostic`] with a
-    /// recovery (LIB-13). The quirks E3 to E5 of the reference implementation, kept as is,
+    /// each error the strict mode would raise becomes a [`Diagnostic`] with a
+    /// recovery (LIB-13). The quirks E3 to E5,
     /// are reported too.
     ///
     /// On a buffer that the strict mode accepts, the message read is the
@@ -93,7 +93,7 @@ pub struct Parsed {
 }
 
 impl Message {
-    /// Reads a message (`Message().parse(buffer)`), as the reference implementation does.
+    /// Reads a message.
     ///
     /// The buffer is copied once into a shared buffer; binary data are views
     /// on it. Use [`Message::parse_shared`] to avoid the copy.
@@ -136,7 +136,7 @@ impl Message {
         Parser::run(buffer.into(), false).map(|parsed| parsed.message)
     }
 
-    /// [`Message::parse`], also returning the warnings that the reference implementation emits
+    /// [`Message::parse`], also returning the warnings
     /// (`DeprecationWarning` for records of type 3, 5 and 6).
     ///
     /// ```
@@ -239,8 +239,8 @@ impl Notes {
         Ok(())
     }
 
-    /// A quirk of the reference implementation, kept as is, that the tolerant mode reports
-    /// (E3–E5): the reference implementation raises nothing, so the message is the crate's.
+    /// A quirk that the tolerant mode reports
+    /// (E3–E5): the strict mode raises nothing, so the message is the crate's.
     fn note(&mut self, code: DiagnosticCode, message: String, position: Position) {
         if self.tolerant {
             self.diagnostics.push(Diagnostic {
@@ -253,9 +253,11 @@ impl Notes {
     }
 }
 
-/// Visitor of the reference implementation (`_Parser`): fills a tagged record.
+/// Visitor that fills a tagged record.
 struct TextParser<'a> {
     record: &'a mut AsciiRecord,
+    /// Fields of `record` by tag and alias.
+    fields: &'a mut FieldIndex,
     subfields: Vec<SubField>,
     values: Vec<Item>,
     closed: bool,
@@ -267,9 +269,15 @@ struct TextParser<'a> {
 }
 
 impl<'a> TextParser<'a> {
-    fn new(record: &'a mut AsciiRecord, index: usize, notes: &'a mut Notes) -> Self {
+    fn new(
+        record: &'a mut AsciiRecord,
+        fields: &'a mut FieldIndex,
+        index: usize,
+        notes: &'a mut Notes,
+    ) -> Self {
         TextParser {
             record,
+            fields,
             subfields: Vec::new(),
             values: Vec::new(),
             closed: false,
@@ -350,9 +358,13 @@ impl RecordVisitor for TextParser<'_> {
             }
         };
         let position = self.position(Some(tag.clone()));
-        if !self.record.field(&tag).is_some_and(AnyField::is_truthy) {
+        if !self
+            .record
+            .field_indexed(&tag, self.fields)
+            .is_some_and(AnyField::is_truthy)
+        {
             let field = Field::new(record_type, tag.clone(), "")?;
-            if let Err(e) = self.record.add_field(field) {
+            if let Err(e) = self.record.add_field_indexed(field, self.fields) {
                 // A first occurrence with a simple value: BAD_TAG_DUPLICATE.
                 // The tolerant mode reuses it.
                 let e = locate(e, position.record_index, None, position.offset);
@@ -360,7 +372,7 @@ impl RecordVisitor for TextParser<'_> {
                     .recover(DiagnosticCode::DuplicateTag, Severity::Warning, e)?;
             }
         }
-        let field = match self.record.field_mut(FieldKey::Tag(tag.clone())) {
+        let field = match self.record.field_mut_indexed(&tag, self.fields) {
             Some(AnyField::Text(f)) => f,
             _ => {
                 // A binary field of the same tag (not reachable from a
@@ -445,7 +457,7 @@ struct Parser {
     notes: Notes,
     /// Bytes the tolerant mode could not read.
     trailing: Bytes,
-    /// Number of the last tagged record read (`record` in the reference implementation).
+    /// Number of the last tagged record read (`record`).
     last_tagged: Option<PyInt>,
     /// Last search of the data label: from where, for which label, and what
     /// it found. Offsets only grow, so a match after the new start stands.
@@ -456,6 +468,12 @@ struct Parser {
     /// For each record, the bytes read and the bytes of its fields
     /// (LIB-12).
     origins: Vec<(Vec<Bytes>, Vec<RawField>)>,
+    /// Fields by tag and alias of the Type-1 (record 0), kept for the
+    /// whole parsing: a Type-1 read again adds to it, and each binary
+    /// record looks up its CNT.
+    type1_fields: FieldIndex,
+    /// Fields by tag and alias of the last other record read, and its index.
+    record_fields: (usize, FieldIndex),
 }
 
 impl Parser {
@@ -473,6 +491,8 @@ impl Parser {
             data_search: None,
             cnt_chars: None,
             origins: vec![(Vec::new(), Vec::new())],
+            type1_fields: FieldIndex::default(),
+            record_fields: (usize::MAX, FieldIndex::default()),
         };
         // `reset(autocreate=False)`: an empty Type-1.
         parser
@@ -633,7 +653,7 @@ impl Parser {
                     }
                     Some(first) if first - offset > length => {
                         future = Some((DiagnosticCode::LenMismatch, Error::nist_too_long()));
-                        // the reference implementation stops before the FS, which then reads as
+                        // the strict mode stops before the FS, which then reads as
                         // extra bytes; the tolerant mode keeps it.
                         if self.notes.tolerant && Some(first) == pos_fs {
                             first - offset + 1
@@ -832,7 +852,15 @@ impl Parser {
             return Err(Error::index_out_of_range());
         };
         let record_type = record.record_type();
-        let mut parser = TextParser::new(record, index, &mut self.notes);
+        let fields = if index == 0 {
+            &mut self.type1_fields
+        } else {
+            if self.record_fields.0 != index {
+                self.record_fields = (index, FieldIndex::default());
+            }
+            &mut self.record_fields.1
+        };
+        let mut parser = TextParser::new(record, fields, index, &mut self.notes);
         let lexed = lex(text, offset, &mut parser);
         let (closed, spans) = (parser.closed, parser.spans);
         if let Err(e) = lexed {
@@ -974,7 +1002,7 @@ impl Parser {
             return Err(Error::index_out_of_range());
         };
         // `record.CNT`: the first field whose alias is CNT.
-        let Some(field) = type1.fields().iter().find(|f| f.alias() == alias::CNT) else {
+        let Some(field) = type1.alias_indexed(alias::CNT, &mut self.type1_fields) else {
             return Err(Error::bad_attribute_get(alias::CNT, 1));
         };
         let field = match field {

@@ -15,7 +15,7 @@ Each line is `group TAB op TAB format TAB input TAB expected`:
 
 Usage (from the repository root):
 
-    python3.12 -I tools/oracle/gen_struct_vectors.py > tests/data/struct_vectors.tsv
+    python3.12 -I tools/python/gen_struct_vectors.py > tests/data/struct_vectors.tsv
 """
 
 import platform

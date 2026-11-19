@@ -14,9 +14,9 @@ use serde::{Deserialize, Serialize};
 use crate::bytes::Bytes;
 use crate::field::{AnyField, BinaryField, DEFAULT_FORMAT, Field};
 use crate::message::Message;
-use crate::record::{AsciiRecord, BinaryRecord, Record};
+use crate::record::{AsciiRecord, BinaryRecord, FieldIndex, Record};
 use crate::subfield::SubField;
-use crate::value::{Item, Kind, ListElem, PyInt, Scalar, SubValue, Value};
+use crate::value::{Item, Kind, ListElem, MAX_ITEM_DEPTH, PyInt, Scalar, SubValue, Value};
 
 /// Key of an integer beyond `i64`: `{"int": "-123…"}`.
 const INT_KEY: &str = "int";
@@ -230,6 +230,18 @@ impl Serialize for Scalar {
 /// Reads a scalar, or a list of items when `nested`.
 struct ItemVisitor {
     nested: bool,
+    /// Lists entered so far: past the lists of a value and
+    /// [`MAX_ITEM_DEPTH`] levels of items, the input is refused before the
+    /// recursion goes deeper (the API checks the exact depth).
+    depth: usize,
+}
+
+impl<'de> de::DeserializeSeed<'de> for ItemVisitor {
+    type Value = Item;
+
+    fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Item, D::Error> {
+        deserializer.deserialize_any(self)
+    }
 }
 
 impl<'de> Visitor<'de> for ItemVisitor {
@@ -279,8 +291,15 @@ impl<'de> Visitor<'de> for ItemVisitor {
         if !self.nested {
             return Err(de::Error::invalid_type(de::Unexpected::Seq, &self));
         }
+        if self.depth > MAX_ITEM_DEPTH + 2 {
+            return Err(de::Error::custom(crate::Error::items_too_deep()));
+        }
         let mut items = Vec::new();
-        while let Some(item) = seq.next_element::<Item>()? {
+        let seed = || ItemVisitor {
+            nested: true,
+            depth: self.depth + 1,
+        };
+        while let Some(item) = seq.next_element_seed(seed())? {
             items.push(item);
         }
         Ok(Item::List(items))
@@ -289,7 +308,10 @@ impl<'de> Visitor<'de> for ItemVisitor {
 
 impl<'de> Deserialize<'de> for Scalar {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        match deserializer.deserialize_any(ItemVisitor { nested: false })? {
+        match deserializer.deserialize_any(ItemVisitor {
+            nested: false,
+            depth: 0,
+        })? {
             Item::Scalar(s) => Ok(s),
             Item::List(_) => Err(de::Error::custom("expected a scalar")),
         }
@@ -319,7 +341,10 @@ impl Serialize for Item {
 
 impl<'de> Deserialize<'de> for Item {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_any(ItemVisitor { nested: true })
+        deserializer.deserialize_any(ItemVisitor {
+            nested: true,
+            depth: 0,
+        })
     }
 }
 
@@ -680,8 +705,11 @@ impl RecordIn {
             Some(fields) => {
                 let autosort = self.autosort.unwrap_or(true);
                 let mut r = AsciiRecord::with(t, false, autosort).map_err(E::custom)?;
+                // `add_field`, in constant time per field.
+                let mut index = FieldIndex::default();
                 for field in fields {
-                    r.add_field(field.build::<E>(Some(t))?).map_err(E::custom)?;
+                    r.add_field_indexed(field.build::<E>(Some(t))?, &mut index)
+                        .map_err(E::custom)?;
                 }
                 Ok(Record::Ascii(r))
             }

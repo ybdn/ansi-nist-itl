@@ -3,8 +3,8 @@
 mod ascii;
 mod binary;
 
-pub(crate) use ascii::RawField;
 pub use ascii::{AsciiRecord, FieldKey};
+pub(crate) use ascii::{FieldIndex, RawField};
 pub use binary::{BinaryRecord, ImageHeader, SignatureHeader};
 
 use crate::alias;

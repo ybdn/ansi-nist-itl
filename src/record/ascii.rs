@@ -1,5 +1,6 @@
 //! Tagged records.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -7,7 +8,7 @@ use crate::alias;
 use crate::bytes::Bytes;
 use crate::defaults::Defaults;
 use crate::error::{Error, Position, Result};
-use crate::field::{AnyField, BinaryField, Field};
+use crate::field::{AnyField, BinaryField, Field, check_in_record, data_label};
 use crate::py::{pad_int, pad_str, py_int, thousands};
 use crate::value::{PyInt, Value};
 use crate::{FS, GS};
@@ -163,7 +164,7 @@ fn same_shape(a: &AnyField, b: &AnyField) -> bool {
 ///
 /// Fields are text ([`Field`]) or binary ([`BinaryField`]), each identified
 /// by its tag number and, optionally, an alias taken from the table of
-/// the reference implementation when the field is added.
+/// the record type when the field is added.
 ///
 /// ```
 /// use ansi_nist_itl::{AsciiRecord, Value};
@@ -390,6 +391,12 @@ impl AsciiRecord {
     ///
     /// Returns the record, so that calls can be chained.
     ///
+    /// Complexity: the fields already there are scanned, so each call takes
+    /// a time linear in their number, and adding N fields one call at a time
+    /// takes a time proportional to N². Reading a record with
+    /// [`Message::parse`](crate::Message::parse) or deserializing it is
+    /// linear.
+    ///
     /// ```
     /// use ansi_nist_itl::{AsciiRecord, Field};
     ///
@@ -407,7 +414,22 @@ impl AsciiRecord {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn add_field(&mut self, field: impl Into<AnyField>) -> Result<&mut Self> {
-        let mut field = field.into();
+        let field = self.checked_field(field.into())?;
+        for other in self.fields.iter() {
+            if other.tag() == field.tag() {
+                return Err(self.tag_duplicate(&field));
+            }
+            if !field.alias().is_empty() && other.alias() == field.alias() {
+                return Err(self.alias_duplicate(&field));
+            }
+        }
+        self.fields_mut().push(field);
+        Ok(self)
+    }
+
+    /// `field`, with the alias of the table if it has none, if its record
+    /// number is the type of the record.
+    fn checked_field(&self, mut field: AnyField) -> Result<AnyField> {
         if field.alias().is_empty() {
             let table = self.alias_table()?;
             if let Some(alias) = table_tag(field.tag()).and_then(|t| alias::alias_of(table, t)) {
@@ -420,22 +442,82 @@ impl AsciiRecord {
                     .with_position(self.field_position(field.tag())),
             );
         }
-        for other in self.fields.iter() {
-            if other.tag() == field.tag() {
-                return Err(Error::tag_duplicate(field.tag(), self.record_type)
-                    .with_position(self.field_position(field.tag())));
+        Ok(field)
+    }
+
+    fn tag_duplicate(&self, field: &AnyField) -> Error {
+        Error::tag_duplicate(field.tag(), self.record_type)
+            .with_position(self.field_position(field.tag()))
+    }
+
+    fn alias_duplicate(&self, field: &AnyField) -> Error {
+        Error::alias_duplicate(field.alias(), self.record_type)
+            .with_position(self.field_position(field.tag()))
+    }
+
+    /// Rebuilds `index` if fields were added or removed since it was built.
+    fn sync(&self, index: &mut FieldIndex) {
+        if index.len != self.fields.len() {
+            *index = FieldIndex::default();
+            for (i, f) in self.fields.iter().enumerate() {
+                index.insert(f, i);
             }
-            if !field.alias().is_empty() && other.alias() == field.alias() {
-                return Err(Error::alias_duplicate(field.alias(), self.record_type)
-                    .with_position(self.field_position(field.tag())));
-            }
+            index.len = self.fields.len();
         }
+    }
+
+    /// [`AsciiRecord::add_field`] in constant time, the duplicates being
+    /// looked up in `index`: same checks, same errors.
+    pub(crate) fn add_field_indexed(
+        &mut self,
+        field: impl Into<AnyField>,
+        index: &mut FieldIndex,
+    ) -> Result<()> {
+        let field = self.checked_field(field.into())?;
+        self.sync(index);
+        // `add_field` reports the first field, in order, with the same tag
+        // or the same alias; the tag first when one field has both.
+        let tag = index.tags.get(field.tag()).copied();
+        let alias = (!field.alias().is_empty())
+            .then(|| index.aliases.get(field.alias()).copied())
+            .flatten();
+        match (tag, alias) {
+            (Some(t), Some(a)) if a < t => return Err(self.alias_duplicate(&field)),
+            (Some(_), _) => return Err(self.tag_duplicate(&field)),
+            (None, Some(_)) => return Err(self.alias_duplicate(&field)),
+            (None, None) => {}
+        }
+        index.insert(&field, self.fields.len());
+        index.len += 1;
         self.fields_mut().push(field);
-        Ok(self)
+        Ok(())
+    }
+
+    /// [`AsciiRecord::field_mut`] by tag, through `index`.
+    pub(crate) fn field_mut_indexed(
+        &mut self,
+        tag: &PyInt,
+        index: &mut FieldIndex,
+    ) -> Option<&mut AnyField> {
+        self.sync(index);
+        let i = *index.tags.get(tag)?;
+        self.fields_mut().get_mut(i)
+    }
+
+    /// The first field whose alias is `alias` (not empty), through `index`.
+    pub(crate) fn alias_indexed(&self, alias: &str, index: &mut FieldIndex) -> Option<&AnyField> {
+        self.sync(index);
+        self.fields.get(*index.aliases.get(alias)?)
+    }
+
+    /// [`AsciiRecord::field`] by tag, through `index`.
+    pub(crate) fn field_indexed(&self, tag: &PyInt, index: &mut FieldIndex) -> Option<&AnyField> {
+        self.sync(index);
+        self.fields.get(*index.tags.get(tag)?)
     }
 
     /// First field whose tag, or whose non-empty alias, is `key`
-    /// (`record[key]`).
+    /// (`record[key]`). A scan of the fields: linear in their number.
     ///
     /// ```
     /// use ansi_nist_itl::{AsciiRecord, Field, Value};
@@ -482,7 +564,7 @@ impl AsciiRecord {
     /// Removes the first field with this tag number (`del record[tag]`), and
     /// returns it; nothing happens if there is none.
     ///
-    /// the reference implementation compares the key with the tag only: an alias never removes
+    /// The key is compared with the tag only: an alias never removes
     /// anything, so only a number is accepted here.
     ///
     /// ```
@@ -499,7 +581,7 @@ impl AsciiRecord {
     /// ```compile_fail
     /// # use ansi_nist_itl::AsciiRecord;
     /// let mut r = AsciiRecord::new(2)?;
-    /// r.remove_field("IDC"); // `del r['IDC']` has no effect in the reference implementation
+    /// r.remove_field("IDC"); // `del r['IDC']` has no effect
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn remove_field(&mut self, tag: impl Into<PyInt>) -> Option<AnyField> {
@@ -522,6 +604,12 @@ impl AsciiRecord {
     ///
     /// A binary field only takes bytes: setting it gives a `TypeMismatch`
     /// error.
+    ///
+    /// Complexity: the fields are scanned, so each call takes
+    /// a time linear in their number, and setting N new fields one call at a time
+    /// takes a time proportional to N². Reading a record with
+    /// [`Message::parse`](crate::Message::parse) or deserializing it is
+    /// linear.
     ///
     /// ```
     /// use ansi_nist_itl::AsciiRecord;
@@ -547,14 +635,15 @@ impl AsciiRecord {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn set(&mut self, name: &str, value: impl Into<Value>) -> Result<()> {
-        self.assign(name, Assigned::Text(value.into()))
+        let value = value.into().check_depth()?;
+        self.assign(name, Assigned::Text(value))
     }
 
     /// Sets a binary field by name, following the steps of
     /// [`AsciiRecord::set`]; `DATA` and `_N` add a [`BinaryField`] when the
     /// tag is the `DATA` of the table.
     ///
-    /// `DATA` on a type without it gives the `TypeError` of the reference implementation, and a
+    /// `DATA` on a type without it gives a `TypeError`, and a
     /// text field only takes text (`TypeMismatch`).
     ///
     /// ```
@@ -736,7 +825,13 @@ impl AsciiRecord {
         if self.autosort {
             text.sort_by(|a, b| a.tag().cmp(b.tag()));
         }
-        text.extend(binary);
+        // The data field last: the reading takes what follows it as data.
+        let data = alias::table(self.record_type).and_then(|t| alias::tag_of(t, alias::DATA));
+        let is_data = |f: &&AnyField| data.is_some_and(|t| f.tag().to_i64() == Some(i64::from(t)));
+        let (data_fields, others): (Vec<&AnyField>, Vec<&AnyField>) =
+            binary.into_iter().partition(is_data);
+        text.extend(others);
+        text.extend(data_fields);
         text
     }
 
@@ -747,6 +842,12 @@ impl AsciiRecord {
     /// The first field, whatever its tag, takes the length of the record:
     /// it keeps this value afterwards. An empty record gives
     /// `IndexOutOfRange`, a binary first field `TypeMismatch`.
+    ///
+    /// What the reading would cut or misread is refused: a separator in a
+    /// text value or in a binary field other than the data field
+    /// (`Encoding`), and, in a record type with data, the data label `999:`
+    /// in another field or a text field at the data tag (`DataLabel`). The
+    /// data field is written last.
     ///
     /// ```
     /// use ansi_nist_itl::{AsciiRecord, Value};
@@ -761,13 +862,18 @@ impl AsciiRecord {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn to_bytes(&mut self) -> Result<Vec<u8>> {
+        let data = data_label(self.record_type);
         let mut rest = Vec::new();
         for (i, field) in self.sorted_fields(1).into_iter().enumerate() {
             if i > 0 {
                 rest.push(GS);
             }
-            rest.extend(field.to_bytes()?);
+            let bytes = field.to_bytes()?;
+            check_in_record(field, &bytes, data.as_ref())
+                .map_err(|e| e.with_position(self.field_position(field.tag())))?;
+            rest.extend(bytes);
         }
+
         let position = self.record_position();
         // The fixed point runs on a copy of the first field, written back
         // only if it changed: a record read keeps sharing its fields.
@@ -784,6 +890,12 @@ impl AsciiRecord {
         };
         let result = Self::fix_len(&mut first, &rest);
         let first = AnyField::Text(first);
+        if let Ok(out) = &result {
+            // The first field as written: up to the first GS.
+            let end = out.iter().position(|&b| b == GS).unwrap_or(out.len());
+            check_in_record(&first, out.get(..end).unwrap_or_default(), data.as_ref())
+                .map_err(|e| e.with_position(self.field_position(first.tag())))?;
+        }
         if self.fields.first() != Some(&first) {
             if let Some(slot) = self.fields_mut().first_mut() {
                 *slot = first;
@@ -864,7 +976,7 @@ impl AsciiRecord {
     }
 
     /// `true` if the record was read and has not changed since, LEN and CNT
-    /// aside: the reference implementation recomputes them on write.
+    /// aside: they are recomputed on write.
     pub(crate) fn is_unchanged(&self) -> bool {
         let Some(origin) = self.origin() else {
             return false;
@@ -922,28 +1034,70 @@ impl AsciiRecord {
     /// Type-1 keeps its bytes unless `cnt_rebuilt`.
     pub(crate) fn exact_bytes(&self, cnt_rebuilt: bool) -> Result<Vec<u8>> {
         let origin = self.origin();
-        let raw_of = |tag: &PyInt| origin.and_then(|o| o.raw.iter().rev().find(|r| &r.tag == tag));
-        let read_of = |tag: &PyInt| origin.and_then(|o| o.fields.iter().find(|f| f.tag() == tag));
+        // By tag, built once: a scan per field would be quadratic. The last
+        // bytes read of a tag, and the first field read with it.
+        let mut raws: HashMap<&PyInt, &RawField> = HashMap::new();
+        let mut reads: HashMap<&PyInt, &AnyField> = HashMap::new();
+        if let Some(o) = origin {
+            raws.extend(o.raw.iter().map(|r| (&r.tag, r)));
+            for f in o.fields.iter() {
+                reads.entry(f.tag()).or_insert(f);
+            }
+        }
+        let raw_of = |tag: &PyInt| raws.get(tag).copied();
+        let read_of = |tag: &PyInt| reads.get(tag).copied();
         let cnt = self.cnt_index();
+        let data = data_label(self.record_type);
+        // The fields in their current order, the data field last: one added
+        // after the reading goes before it. A record read keeps its order.
+        let is_data = |f: &AnyField| {
+            matches!(f, AnyField::Binary(_))
+                && data
+                    .as_ref()
+                    .is_some_and(|(t, _)| f.tag().to_i64() == Some(i64::from(*t)))
+        };
+        let order = self
+            .fields
+            .iter()
+            .enumerate()
+            .skip(1)
+            .filter(|(_, f)| !is_data(f))
+            .chain(
+                self.fields
+                    .iter()
+                    .enumerate()
+                    .skip(1)
+                    .filter(|(_, f)| is_data(f)),
+            );
         let mut rest = Vec::new();
-        for (i, field) in self.fields.iter().enumerate().skip(1) {
-            if i > 1 {
+        for (n, (i, field)) in order.enumerate() {
+            if n > 0 {
                 rest.push(GS);
             }
             let raw = raw_of(field.tag());
             let unchanged = read_of(field.tag()).is_some_and(|then| {
                 then == field || (Some(i) == cnt && !cnt_rebuilt && same_shape(field, then))
             });
+            let checked = |bytes: &[u8]| {
+                check_in_record(field, bytes, data.as_ref())
+                    .map_err(|e| e.with_position(self.field_position(field.tag())))
+            };
             match raw {
                 Some(raw) if unchanged => {
                     rest.extend_from_slice(&raw.label);
                     rest.extend_from_slice(&raw.content);
                 }
                 Some(raw) => {
+                    let value = field.value_bytes()?;
+                    checked(&value)?;
                     rest.extend_from_slice(&raw.label);
-                    rest.extend(field.value_bytes()?);
+                    rest.extend(value);
                 }
-                None => rest.extend(field.to_bytes()?),
+                None => {
+                    let bytes = field.to_bytes()?;
+                    checked(&bytes)?;
+                    rest.extend(bytes);
+                }
             }
         }
         let position = self.record_position();
@@ -1022,10 +1176,75 @@ impl fmt::Display for AsciiRecord {
     }
 }
 
+/// Position of the first field of each tag and of each non-empty alias of
+/// a record, so that the parser adds and finds fields in constant time
+/// instead of scanning the record (quadratic in the number of fields).
+#[derive(Debug, Default)]
+pub(crate) struct FieldIndex {
+    tags: HashMap<PyInt, usize>,
+    aliases: HashMap<String, usize>,
+    /// Number of fields of the record when indexed: any other number means
+    /// fields were appended outside the index, which is then rebuilt.
+    /// shortcut: a field removed or replaced behind the index goes unseen;
+    /// the parser only appends, use a generation counter if that changes.
+    len: usize,
+}
+
+impl FieldIndex {
+    fn insert(&mut self, field: &AnyField, at: usize) {
+        self.tags.entry(field.tag().clone()).or_insert(at);
+        if !field.alias().is_empty() {
+            self.aliases.entry(field.alias().to_owned()).or_insert(at);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::error::{ErrorKind, NistError};
+
+    /// `add_field_indexed` accepts and refuses the same fields as
+    /// `add_field`, with the same errors, whatever the order of the
+    /// duplicates; the index follows changes made outside it.
+    #[test]
+    fn indexed_add_matches_add_field() {
+        use crate::field::Field;
+        let candidates = || {
+            vec![
+                Field::new(2, 3, "a").unwrap(),
+                Field::with(2, 4, "b", "FSI", "%d.%03d:", "X").unwrap(),
+                Field::new(2, 3, "again").unwrap(),
+                Field::with(2, 5, "c", "FSI", "%d.%03d:", "X").unwrap(),
+                Field::with(2, 3, "d", "FSI", "%d.%03d:", "X").unwrap(),
+                Field::with(2, 6, "e", "FSI", "%d.%03d:", "Y").unwrap(),
+                Field::with(2, 4, "f", "FSI", "%d.%03d:", "Y").unwrap(),
+                Field::new(9, 7, "g").unwrap(),
+                Field::new(2, 2, "idc").unwrap(),
+            ]
+        };
+        let mut plain = AsciiRecord::new(2).unwrap();
+        let mut indexed = AsciiRecord::new(2).unwrap();
+        let mut index = FieldIndex::default();
+        for (a, b) in candidates().into_iter().zip(candidates()) {
+            let expected = plain.add_field(a).map(|_| ()).map_err(|e| e.to_string());
+            let got = indexed
+                .add_field_indexed(b, &mut index)
+                .map_err(|e| e.to_string());
+            assert_eq!(got, expected);
+        }
+        assert_eq!(indexed, plain);
+        let tag = PyInt::from(6);
+        assert_eq!(indexed.field_indexed(&tag, &mut index), plain.field(6));
+        // Fields appended behind the index.
+        indexed.add_field(Field::new(2, 8, "h").unwrap()).unwrap();
+        let tag = PyInt::from(8);
+        assert!(indexed.field_mut_indexed(&tag, &mut index).is_some());
+        let err = indexed
+            .add_field_indexed(Field::new(2, 8, "again").unwrap(), &mut index)
+            .unwrap_err();
+        assert_eq!(*err.kind(), ErrorKind::Nist(NistError::BadTagDuplicate));
+    }
 
     fn defaults() -> Defaults {
         Defaults {
@@ -1139,7 +1358,7 @@ mod tests {
 
     #[test]
     fn digits_limit_is_an_unknown_attribute() {
-        // `int()` raises `ValueError` for both, caught by the reference implementation.
+        // `int()` raises `ValueError` for both, caught by the parser.
         let mut r = AsciiRecord::new(2).unwrap();
         let name = format!("_{}", "1".repeat(4301));
         let e = r.set(&name, "x").unwrap_err();
@@ -1176,11 +1395,10 @@ mod tests {
     fn summary_tags() {
         let mut r = AsciiRecord::new(2).unwrap();
         r.add_field(Field::new(2, 3, "x").unwrap()).unwrap();
-        r.add_field(Field::new(2, -1, "n").unwrap()).unwrap();
         r.add_field(Field::new(2, 1000, "m").unwrap()).unwrap();
         assert_eq!(
             r.summary(),
-            " 2.-01:                               : n\n 2.001: LEN                           : 0\n 2.002: IDC                           : 0\n 2.003:                               : x\n 2.1000:                               : m"
+            " 2.001: LEN                           : 0\n 2.002: IDC                           : 0\n 2.003:                               : x\n 2.1000:                               : m"
         );
         assert_eq!(r.to_string(), r.summary());
         assert_eq!(AsciiRecord::with(2, false, true).unwrap().summary(), "");

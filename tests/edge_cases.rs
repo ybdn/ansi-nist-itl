@@ -1,4 +1,4 @@
-//! Edge cases of the reference implementation, checked against it (QA-02).
+//! Edge cases of reading and writing.
 //!
 //! One test per case: same values read, same bytes written, or same text
 //! for the error.
@@ -1010,9 +1010,11 @@ fn c100_underscore_inner_underscore() {
 
 #[test]
 fn c101_underscore_minus() {
+    // Field 10.-7 would be written `10.-07:`, which the reading does not read.
     let mut r = AsciiRecord::new(10).unwrap();
-    r.set("_-7", "v").unwrap();
-    assert_eq!(tags(&r), ["1", "2", "-7"]);
+    let err = r.set("_-7", "v").unwrap_err();
+    assert_eq!(err.kind(), &ansi_nist_itl::ErrorKind::BadFormat);
+    assert_eq!(tags(&r), ["1", "2"]);
 }
 
 #[test]

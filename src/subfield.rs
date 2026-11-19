@@ -2,8 +2,9 @@
 
 use crate::US;
 use crate::error::{Error, Result};
+use crate::field::no_separator;
 use crate::py::encode_latin1;
-use crate::value::{Item, Kind, Scalar, SubValue};
+use crate::value::{Item, Kind, Scalar, SubValue, check_depth};
 
 /// Subfield of a [`Field`](crate::Field): a scalar value, or a list of items
 /// separated by US (`0x1F`) when written.
@@ -89,9 +90,10 @@ impl SubField {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn set_value(&mut self, value: impl Into<SubValue>) -> Result<()> {
+        let value = value.into().check_depth()?;
         self.value = Scalar::default();
         self.values.clear();
-        match value.into() {
+        match value {
             SubValue::Scalar(v) => {
                 if v.is_truthy() && !self.kind.subfields() {
                     return Err(Error::subfield_cannot_have_value());
@@ -130,7 +132,8 @@ impl SubField {
         if items.peek().is_some() && !self.kind.items() {
             return Err(Error::subfield_cannot_have_items());
         }
-        self.values.extend(items.map(Into::into));
+        let items = check_depth(items.map(Into::into).collect())?;
+        self.values.extend(items);
         Ok(())
     }
 
@@ -198,7 +201,7 @@ impl SubField {
     /// Changes the kind, without checking the current content.
     ///
     /// Without `I`, existing items are hidden from [`SubField::value`] but
-    /// still written by [`SubField::to_bytes`], as in the reference implementation.
+    /// still written by [`SubField::to_bytes`].
     ///
     /// ```
     /// use ansi_nist_itl::{SubField, SubValue};
@@ -218,7 +221,9 @@ impl SubField {
     /// Without items: nothing for `None`, the decimal value of an integer,
     /// `True` / `False`, or the Latin-1 text. With items: each item as
     /// `str(item)` in Latin-1 (`None` is written `None`), separated by US.
-    /// A character outside Latin-1 gives an `Encoding` error.
+    /// A character outside Latin-1 gives an `Encoding` error, and so does a
+    /// separator (FS, GS, RS, US) in the value or in an item, which the
+    /// reading would cut it at.
     ///
     /// ```
     /// use ansi_nist_itl::SubField;
@@ -226,13 +231,18 @@ impl SubField {
     /// assert_eq!(SubField::new((), "SI")?.to_bytes()?, b"");
     /// assert_eq!(SubField::new(12, "SI")?.to_bytes()?, b"12");
     /// assert_eq!(SubField::new("é", "SI")?.to_bytes()?, b"\xe9");
+    /// assert!(SubField::new(vec!["a\u{1f}b"], "SI")?.to_bytes().is_err());
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         if self.values.is_empty() {
             return match &self.value {
                 Scalar::Null => Ok(Vec::new()),
-                Scalar::Text(s) => Ok(encode_latin1(s)?),
+                Scalar::Text(s) => {
+                    let bytes = encode_latin1(s)?;
+                    no_separator(&bytes)?;
+                    Ok(bytes)
+                }
                 other => Ok(other.to_string().into_bytes()),
             };
         }
@@ -241,7 +251,9 @@ impl SubField {
             if i > 0 {
                 out.push(US);
             }
-            out.extend(encode_latin1(&item.to_string())?);
+            let bytes = encode_latin1(&item.to_string())?;
+            no_separator(&bytes)?;
+            out.extend(bytes);
         }
         Ok(out)
     }

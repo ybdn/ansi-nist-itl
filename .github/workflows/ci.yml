@@ -1,23 +1,31 @@
-# Pull requests into develop/main only: a merge into develop replays nothing, the
-# PR was checked. `main` only receives releases, so it alone also runs on push:
+# Pull requests into develop/preprod/prod only: a merge into develop replays nothing, the
+# PR was checked. `prod` only receives releases, so it alone also runs on push:
 # the CI badge of the README follows it and needs runs on that branch. `changes`
-# classifies the diff; every job is skipped when its files did not change, and
-# `ci` is the one status to require. On a push, a release (workflow_call) or a
+# classifies the diff; every Rust job is skipped when its files did not change
+# (`data`, the NIST file check, always runs), and `ci` is the one status to require. On a push, a release (workflow_call) or a
 # manual run everything runs.
-#   core        shared workflow: tests, clippy, rustfmt, docs, MSRV 1.85 (cargo check only)
-#   msrv-test   the tests themselves on Rust 1.85
-#   oracle      comparison with nistitl 0.6 on CPython 3.12.16 (tools/oracle/README.md)
+#   core        shared workflow: tests, clippy, rustfmt, docs, MSRV 1.86 (cargo check only)
+#   msrv-test   the tests themselves on Rust 1.86
 #   fuzz        one minute per fuzz target, from a synthetic seed corpus
-# The long fuzzing (about twenty minutes) and the advisories: scheduled.yml.
+#   deny        cargo-deny: advisories, licences, sources (deny.toml)
+#   semver      cargo-semver-checks against the latest release on crates.io
+#   test-macos  the test suite on the hosted macOS runner
+#   coverage    line coverage with cargo-llvm-cov, shown in the job summary
+# The long fuzzing (about thirty minutes) and the advisories: scheduled.yml.
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [prod]
   pull_request:
-    branches: [develop, main]
+    branches: [develop, preprod, prod]
   workflow_call:
   workflow_dispatch:
+    inputs:
+      run_windows:
+        description: "Also run the test suite on the hosted Windows runner"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -38,8 +46,6 @@ jobs:
       pull-requests: read # paths-filter lists the files of the pull request
     outputs:
       rust: ${{ github.event_name != 'pull_request' || steps.filter.outputs.rust == 'true' }}
-      oracle: ${{ github.event_name != 'pull_request' || steps.filter.outputs.oracle == 'true' }}
-      data: ${{ github.event_name != 'pull_request' || steps.filter.outputs.data == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: filter
@@ -47,33 +53,29 @@ jobs:
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
-            rust: &rust
+            rust:
               - "src/**"
               - "README.md" # included by src/lib.rs: doctests and cargo doc
+              - "docs/GUIDE.md" # its examples are checked by tests/guide.rs
               - "benches/**"
               - "tests/**"
               - "examples/**"
               - "Cargo.*"
+              - "deny.toml"
               - ".github/workflows/**"
-            oracle:
-              - *rust
-              - "tools/oracle/**"
-            data:
-              - "data/**"
-              - "tools/check-data-files.sh"
 
   core:
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     uses: ybdn-ei/.github/.github/workflows/rust-ci.yml@main
     with:
-      msrv: "1.85"
+      msrv: "1.86"
       feature-sets: '["", "--all-features"]'
     secrets: inherit
 
   # `core` only runs `cargo check` on the MSRV: this job runs the tests on it.
   msrv-test:
-    name: Tests on the MSRV (1.85)
+    name: Tests on the MSRV (1.86)
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
@@ -82,7 +84,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          toolchain: "1.85"
+          toolchain: "1.86"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo test --lib --tests
       - run: cargo test --lib --tests --all-features
@@ -102,43 +104,9 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo bench --no-run
 
-  oracle:
-    name: Oracle (nistitl 0.6)
-    needs: changes
-    if: needs.changes.outputs.oracle == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # uv 0.13.6, then CPython 3.12.16 and nistitl 0.6, all from files with
-      # hashes (tools/oracle/requirements*.txt): nothing floats.
-      - name: Install uv
-        run: |
-          python3 -m venv "$RUNNER_TEMP/uv"
-          "$RUNNER_TEMP/uv/bin/python" -m pip install --require-hashes --only-binary :all: -r tools/oracle/requirements-uv.txt
-          echo "$RUNNER_TEMP/uv/bin" >> "$GITHUB_PATH"
-      - name: Install CPython 3.12.16 and nistitl
-        run: |
-          uv python install 3.12.16
-          uv venv --python 3.12.16 "$RUNNER_TEMP/oracle"
-          uv pip install --python "$RUNNER_TEMP/oracle" --require-hashes --only-binary :all: -r tools/oracle/requirements.txt
-          "$RUNNER_TEMP/oracle/bin/python" -c 'import sys; assert sys.version_info[:3] == (3, 12, 16), sys.version'
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Synthetic corpus (seed = run number)
-        run: $RUNNER_TEMP/oracle/bin/python -I tools/oracle/gen_corpus.py "$RUNNER_TEMP/corpus" 20000 "$GITHUB_RUN_NUMBER"
-      - name: Compare with nistitl
-        run: cargo test --release --test oracle
-        env:
-          ANSI_NIST_ITL_CORPUS: ${{ runner.temp }}/corpus
-          ANSI_NIST_ITL_PYTHON: ${{ runner.temp }}/oracle/bin/python
-
+  # Every pull request: a NIST file can be added anywhere, and the job takes seconds.
   data:
     name: Data files (DATA-04)
-    needs: changes
-    if: needs.changes.outputs.data == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -161,7 +129,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: nightly
-      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-fuzz
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -174,6 +142,7 @@ jobs:
           cargo run --example fuzz_seeds -- fuzz/corpus/parse
           cargo run --example fuzz_seeds -- fuzz/corpus/exact
           cargo run --example fuzz_seeds -- fuzz/corpus/parse_tolerant
+          mkdir -p fuzz/corpus/serde && cp fuzz/seeds/serde/*.json fuzz/corpus/serde/
       # The prebuilt cargo-fuzz is a musl binary: its default target would be
       # musl, which the sanitizers do not support.
       - name: Fuzz the parser for one minute
@@ -182,16 +151,117 @@ jobs:
         run: cargo fuzz run exact --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
       - name: Fuzz the tolerant mode for one minute
         run: cargo fuzz run parse_tolerant --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
+      - name: Fuzz the character encodings for one minute
+        run: cargo fuzz run encoding --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
+      - name: Fuzz the deserialization (serde) for one minute
+        run: cargo fuzz run serde --target x86_64-unknown-linux-gnu -- -max_total_time=60 -max_len=8192
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: fuzz-artifacts
           path: fuzz/artifacts
 
+  deny:
+    name: cargo-deny (advisories, licences, sources)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-deny
+      - run: cargo deny --all-features check
+
+  # Against the latest version published on crates.io, with the bump that the
+  # version of Cargo.toml implies.
+  semver:
+    name: cargo-semver-checks
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-semver-checks
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo semver-checks --all-features
+
+  # Same test commands as `core` (default features, then --all-features).
+  test-macos:
+    name: Tests on macOS
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo test --all-targets
+      - run: cargo test --doc
+      - run: cargo test --all-targets --all-features
+      - run: cargo test --doc --all-features
+
+  # Measured only, no threshold and no third-party service: the table goes to the
+  # summary of the run.
+  coverage:
+    name: Coverage (cargo-llvm-cov)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-llvm-cov
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo llvm-cov --all-features --lib --tests --no-report
+      - name: Summary
+        run: |
+          cargo llvm-cov report --summary-only | tee coverage.txt
+          {
+            echo '## Line coverage (all features, library and tests)'
+            echo '```'
+            cat coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Manual only: the other jobs are Linux and macOS. Same test commands as `core` (default features,
+  # then --all-features). Not in `ci`'s needs: it never blocks a pull request.
+  test-windows:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_windows
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - run: cargo test --all-targets
+      - run: cargo test --doc
+      - run: cargo test --all-targets --all-features
+      - run: cargo test --doc --all-features
+
   # The one status to read: green when every needed job passed or was skipped.
   ci:
     if: ${{ !cancelled() }}
-    needs: [changes, core, msrv-test, bench, oracle, data, fuzz]
+    needs: [changes, core, msrv-test, bench, data, fuzz, deny, semver, test-macos, coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
