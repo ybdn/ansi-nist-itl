@@ -1,3 +1,4 @@
+# Réglages de la revue : .coderabbit.yaml.
 # Le dépôt a moins de 10 étoiles : l'offre gratuite de CodeRabbit ne relit pas ses PR
 # d'elle-même. Ce workflow poste la commande qui déclenche la revue. Pas de
 # pull_request_target ni de secret : les PR de forks et de Dependabot, dont le token
@@ -7,6 +8,8 @@ name: CodeRabbit
 on:
   pull_request:
     types: [opened, reopened, ready_for_review]
+    # Les promotions vers preprod/prod reprennent des commits déjà relus : quota épargné.
+    branches: [develop]
 
 permissions:
   contents: read
