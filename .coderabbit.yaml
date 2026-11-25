@@ -1,0 +1,160 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit configuration. It overrides the settings of the app.coderabbit.ai UI.
+# The repository has fewer than 10 stars: CodeRabbit does not review on its own and
+# .github/workflows/coderabbit.yml posts `@coderabbitai review` on each PR into develop.
+language: en-US
+tone_instructions: >-
+  Precise and factual. Cite the standard (ANSI/NIST-ITL 1-2011 Update 2015, NIST SP
+  500-290), EBTS 11.2 or INT-I 5.03 by section when a remark depends on it. No praise.
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  in_progress_fortune: false
+  review_status: true
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - develop
+  path_filters:
+    - "!**/Cargo.lock"
+    - "!fuzz/seeds/**"
+    - "!tests/data/struct_vectors.tsv"
+    - "!.github/social-preview.*"
+  path_instructions:
+    - path: "**/*.rs"
+      instructions: |
+        Rust library, MSRV 1.86, no `unsafe` (`#![forbid(unsafe_code)]`), every public item
+        documented with a runnable example. Invariants to defend (docs/ARCHITECTURE.md §3):
+        - No panic on input, from a file or through the public API (including `serde`).
+          Flag any indexing, slicing, `unwrap`, `expect`, `panic!`, `unreachable!`, unchecked
+          arithmetic on lengths or offsets read from a file, unbounded recursion or
+          allocation sized by the input. A local `#[allow]` must say why the invariant holds.
+        - Exact rewrite: a buffer accepted by `Message::parse` is given back byte for byte by
+          `to_bytes_exact`. Writing refuses what reading would cut or misread.
+        - Determinism: no clock or randomness in parsing or writing; error texts carry no
+          position.
+        - Reading stays linear in the number of fields and records: flag lookups that scan a
+          record per field read.
+        - Stable default behaviour: what `parse` accepts or refuses and the bytes `to_bytes`
+          writes are API. Flag any change to them, and any public API change that
+          `cargo-semver-checks` would call breaking on a 1.x release.
+        - New dependencies must be optional, behind a feature (e.g. the planned `wsq`
+          feature bridging to `wsq-codec`, issue #75), with a licence `deny.toml` accepts.
+    - path: "src/{message,record}/**"
+      instructions: |
+        Parsing and writing core. Check every length, CNT/IDC and separator (0x1C to 0x1F)
+        handling against the standard. Strict mode stops at the first error; tolerant mode
+        (`ParseOptions::tolerant`) keeps going and reports located diagnostics. Ask for a
+        regression test in tests/ and a fuzz target update when the accepted input changes.
+    - path: "src/validation/**"
+      instructions: |
+        Validation against the standard and the EBTS 11.2 / INT-I 5.03 profiles. Every rule
+        must cite the table or clause it implements. Check severity: a file the NIST
+        publishes as conformant (BioCTS `pass-*`) must not become invalid. The `Profile`
+        enum is closed; national profiles are out of scope.
+    - path: "src/{dictionary/update2015.rs,validation/ebts112.rs,py/unicode_tables.rs,py/cpython_vectors.rs}"
+      instructions: |
+        Generated file. Flag any hand edit: the change belongs in the generator under
+        tools/ (tools/standard, tools/profiles, tools/python, tools/gen_unicode_tables.py),
+        and the generated file must be regenerated in the same PR.
+    - path: "src/encoding.rs"
+      instructions: |
+        Encodings of field 1.015 (ASCII, Latin-1, UTF-8, UTF-16, UTF-32). A character whose
+        encoded bytes contain 0x1C to 0x1F must be refused when encoding. `STX`/`ETX`
+        (Annex B.1.8) is not supported and must stay refused.
+    - path: "tests/**"
+      instructions: |
+        Test data must be synthetic, built by the crate with invented values. Flag any real
+        or real-looking biometric data, names, dates of birth or identifiers. Complexity
+        tests use `assert_linear` (thread CPU time, ratio N/16N); flag absolute time bounds.
+        Every Rust example of docs/GUIDE.md must also be in tests/guide.rs.
+    - path: "fuzz/**"
+      instructions: |
+        Fuzz targets must exercise the public API on what was parsed and assert the
+        invariants (exact rewrite, no panic). Never commit a corpus or a crash input derived
+        from a real file.
+    - path: "tools/**"
+      instructions: |
+        Generators read public documents of NIST and the FBI only. Output must be
+        deterministic so that regenerating gives the same file. Each generator directory
+        README says which document it reads.
+    - path: "docs/**"
+      instructions: |
+        Public documentation for integrators and laboratories. Every claim of conformance
+        must point to the test or code that supports it; flag claims stronger than the
+        evidence (e.g. "never", "all files", "proven"). docs/CONFORMANCE.md must list known
+        deviations; results on public files must say how to replay them.
+    - path: "{README.md,CHANGELOG.md,CONTRIBUTING.md,SECURITY.md}"
+      instructions: |
+        English. CHANGELOG follows Keep a Changelog: new entries under `## [Unreleased]`,
+        released entries are never edited. README Rust examples are compiled as doctests.
+    - path: ".github/workflows/**"
+      instructions: |
+        Least privilege: `permissions` per job, no `pull_request_target`, no secrets exposed
+        to forks, third-party actions pinned by SHA (the owner's shared workflow
+        ybdn-ei/.github at @main is accepted). The `ci` job is the single required
+        status; a new job must be added to its `needs`. The `data` job (NIST file check)
+        must run on every PR.
+  pre_merge_checks:
+    title:
+      mode: warning
+      requirements: >-
+        Conventional Commits: `type(scope)?: summary`, type among feat, fix, perf, refactor,
+        docs, test, ci, chore, build, revert; lower case, no final period.
+    description:
+      mode: warning
+    custom_checks:
+      - name: CHANGELOG entry
+        mode: warning
+        instructions: >-
+          If the PR changes behaviour a user can see (public API, what `parse` accepts or
+          refuses, bytes written, validation results, a documented guarantee), CHANGELOG.md
+          must gain an entry under `## [Unreleased]`. Pass otherwise, and for changes limited
+          to tests, CI, tooling or internal refactoring.
+      - name: Conformance statement
+        mode: warning
+        instructions: >-
+          If the PR changes what the crate accepts, refuses, writes or validates with respect
+          to the standard or a profile, docs/CONFORMANCE.md must be updated in the same PR.
+          Pass otherwise.
+      - name: No real NIST data
+        mode: error
+        instructions: >-
+          Fail if the PR adds a binary transaction file (.an2, .eft, .nist, .int, .xml
+          transaction or similar), an image under tests/, fuzz/ or examples/, or a fixture that looks like real biometric or
+          personal data (real-looking names, dates of birth, identifiers, fingerprint or face
+          images). Synthetic data built in code, and files listed in tests/data/ALLOWLIST,
+          pass.
+  tools:
+    clippy:
+      enabled: true
+    actionlint:
+      enabled: true
+    zizmor:
+      enabled: true
+    shellcheck:
+      enabled: true
+    ruff:
+      enabled: true
+    markdownlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    osvScanner:
+      enabled: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - CONTRIBUTING.md
+      - docs/ARCHITECTURE.md
+      - docs/CONFORMANCE.md
+
+chat:
+  auto_reply: true
