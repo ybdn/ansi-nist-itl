@@ -1,8 +1,8 @@
 //! Parser and writer for ANSI/NIST-ITL biometric transaction files
 //! (`.nist`, `.eft`, `.an2`, `.int`…).
 //!
-//! By default the crate reads and writes exactly
-//! as the reference implementation does, quirks included, with the same error messages. Two
+//! By default the crate reads and writes files as they are,
+//! quirks included, with stable error messages. Two
 //! additions are opt-in: an exact writing that gives back the bytes read
 //! ([`Message::to_bytes_exact`]), and a tolerant mode that reads damaged
 //! files with located diagnostics ([`ParseOptions::tolerant`]).
@@ -61,28 +61,29 @@
 //! ([`BinaryRecord`]: Types 3 to 8). A tagged record holds [`Field`]s (text,
 //! split into [`SubField`]s and [`Item`]s by RS and US) and
 //! [`BinaryField`]s (the data at tag 999). Fields are found by tag or by
-//! [`alias`] (`IDC`, `SRC`, `DATA`…), as the reference implementation names them.
+//! [`alias`] (`IDC`, `SRC`, `DATA`…), as the crate names them.
 //!
-//! Values are Python values ([`Value`], [`Scalar`], [`PyInt`]): the reference implementation
-//! stores text, numbers (LEN and IDC are read as numbers), `None` and
+//! Values are Python values ([`Value`], [`Scalar`], [`PyInt`]): a value
+//! holds text, numbers (LEN and IDC are read as numbers), `None` and
 //! booleans, and writes them with Python's `str()`. Binary data are
 //! [`Bytes`], views on the buffer read, never copied.
 //!
-//! # Parity with the reference implementation
+//! # Behaviour
 //!
-//! [`Message::parse`] accepts and refuses what the reference implementation does, with the
-//! same error messages ([`Error`]'s `Display`); [`Message::to_bytes`] and
-//! [`Message::summary`] give the same bytes and text. Python exceptions that
-//! the reference implementation does not catch become typed errors ([`ErrorKind`]); every error
+//! [`Message::parse`] gives the same result and the same error messages
+//! ([`Error`]'s `Display`) on every run; [`Message::to_bytes`] and
+//! [`Message::summary`] give the same bytes and text. Python exceptions
+//! become typed errors ([`ErrorKind`]); every error
 //! also carries a [`Position`]: record, tag, byte offset. The crate never
 //! panics on its input, which is fuzzed.
 //!
 //! # Versions
 //!
-//! As the reference implementation, the crate never reads the version of the standard (1.002,
-//! kept as text): every version is read and written the same way, the
-//! traditional ones (0200 to 0500) as the later ones. No rule depends on the
-//! version: a record type is accepted whatever the version declares, and
+//! The crate never reads the version of the standard (1.002,
+//! kept as text): every value of field 1.002 is read and written the same
+//! way; the tests cover `0200`, `0300`, `0400`, `0500` and `0502`. No rule
+//! depends on the version: a record type is accepted whatever the version
+//! declares, and
 //! Types 3, 5 and 6 give a [`Warning::Deprecated`] in every version.
 //!
 //! ```
@@ -98,7 +99,7 @@
 //!
 //! # Exact writing
 //!
-//! the reference implementation sorts fields, writes labels on 3 digits and recomputes LEN and
+//! [`Message::to_bytes`] sorts fields, writes labels on 3 digits and recomputes LEN and
 //! CNT. [`Message::to_bytes_exact`] keeps the bytes read for what did not
 //! change instead:
 //!
@@ -181,8 +182,8 @@
 //!
 //! # Features
 //!
-//! - `local-date` (default): today's date of a new Type-1 is the local date,
-//!   as the reference implementation gives it; without it, the UTC date. [`Defaults`] fixes the
+//! - `local-date` (default): today's date of a new Type-1 is the local date;
+//!   without it, the UTC date. [`Defaults`] fixes the
 //!   date and the transaction control number.
 //! - `serde`: `Serialize` and `Deserialize` on the model (see above).
 //! - `dictionary`: the `dictionary` module, the fields of
@@ -195,6 +196,27 @@
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
+// No input, from a file or through the API, may panic: errors are returned.
+// A proven invariant needs a local `#[allow]` that says why it holds.
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+    clippy::indexing_slicing
+)]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::indexing_slicing
+    )
+)]
 
 pub mod alias;
 mod bytes;
@@ -227,7 +249,7 @@ pub use message::{Message, ParseOptions, Parsed, RecordVisitor, parse_record};
 pub use record::{AsciiRecord, BinaryRecord, FieldKey, ImageHeader, Record, SignatureHeader};
 pub use structfmt::StructValue;
 pub use subfield::SubField;
-pub use value::{Item, Kind, ListElem, PyInt, Scalar, SubValue, Value};
+pub use value::{Item, Kind, ListElem, MAX_ITEM_DEPTH, PyInt, Scalar, SubValue, Value};
 
 // The Rust examples of the README compile (they need the `validation`
 // feature).

@@ -1,7 +1,7 @@
 //! Differential test against vectors computed by CPython 3.12.
 //!
 //! Ignored by default: generate the vectors with
-//! `tools/oracle/gen_py_vectors.py`, then run
+//! `tools/python/gen_py_vectors.py`, then run
 //! `ANSI_NIST_ITL_PY_VECTORS=<file> cargo test --release -- --ignored cpython_vectors`.
 
 use super::{float_repr, py_int, repr_bytes, repr_str};
@@ -14,7 +14,7 @@ fn unhex(s: &str) -> Vec<u8> {
 }
 
 #[test]
-#[ignore = "needs ANSI_NIST_ITL_PY_VECTORS (tools/oracle/gen_py_vectors.py)"]
+#[ignore = "needs ANSI_NIST_ITL_PY_VECTORS (tools/python/gen_py_vectors.py)"]
 fn cpython_vectors() {
     let path = std::env::var("ANSI_NIST_ITL_PY_VECTORS")
         .expect("ANSI_NIST_ITL_PY_VECTORS must point to the vectors file");

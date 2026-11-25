@@ -11,8 +11,8 @@ pub use parse::{ParseOptions, Parsed};
 use crate::alias;
 use crate::bytes::Bytes;
 use crate::defaults::Defaults;
-use crate::error::{Error, Position, Result};
-use crate::field::{AnyField, Field};
+use crate::error::{Error, ErrorKind, Position, Result};
+use crate::field::{AnyField, Field, no_separator};
 use crate::py::py_int;
 use crate::record::{AsciiRecord, Record};
 use crate::subfield::SubField;
@@ -337,7 +337,10 @@ impl Message {
     /// ```
     pub fn by_key(&self, record_type: u32, idc: impl Into<Scalar>) -> Result<&Record> {
         let index = self.find(record_type, &idc.into())?;
-        Ok(&self.records[index])
+        // `find` gives the index of a record.
+        self.records
+            .get(index)
+            .ok_or_else(Error::index_out_of_range)
     }
 
     /// [`Message::by_key`], mutable.
@@ -353,7 +356,9 @@ impl Message {
     /// ```
     pub fn by_key_mut(&mut self, record_type: u32, idc: impl Into<Scalar>) -> Result<&mut Record> {
         let index = self.find(record_type, &idc.into())?;
-        Ok(&mut self.records[index])
+        self.records
+            .get_mut(index)
+            .ok_or_else(Error::index_out_of_range)
     }
 
     /// Index of the first record matching `(t, idc)`, `None` if there is none.
@@ -433,8 +438,7 @@ impl Message {
     /// (`del msg[(t, idc)]`), found as by [`Message::by_key`], and returns
     /// it.
     ///
-    /// Type 1 gives `CANNOT_DELETE_TYPE1`; no record gives the `TypeError`
-    /// of the reference implementation (`TypeMismatch`).
+    /// Type 1 gives `CANNOT_DELETE_TYPE1`; no record gives `TypeMismatch`.
     ///
     /// ```
     /// use ansi_nist_itl::{AsciiRecord, Message};
@@ -465,8 +469,8 @@ impl Message {
     /// Removes the first record equal to `record` (`msg - record`) and
     /// returns it.
     ///
-    /// the reference implementation compares identities; records are compared by value here. A
-    /// Type-1 gives `CANNOT_DELETE_TYPE1` (the reference implementation would remove it), no
+    /// Records are compared by value. A
+    /// Type-1 gives `CANNOT_DELETE_TYPE1`, no
     /// equal record `RECORD_NOT_FOUND`.
     ///
     /// ```
@@ -521,7 +525,7 @@ impl Message {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn set_tot(&mut self, value: impl Into<Value>) -> Result<()> {
-        let value = value.into();
+        let value = value.into().check_depth()?;
         self.first_ascii_mut(alias::TOT)?.set(alias::TOT, value)
     }
 
@@ -531,7 +535,7 @@ impl Message {
     /// then one subfield `<type> US <IDC>` per record, the IDC taken as is
     /// (`"07"` stays `07`). An absent CNT gives `MissingField`.
     ///
-    /// The value cannot be set: the reference implementation raises `AttributeError`.
+    /// The value cannot be set: this gives `AttributeError`.
     ///
     /// ```
     /// use ansi_nist_itl::{AsciiRecord, Message};
@@ -573,9 +577,11 @@ impl Message {
     /// # Ok::<(), ansi_nist_itl::Error>(())
     /// ```
     pub fn to_bytes(&mut self) -> Result<Vec<u8>> {
+        check_idcs(&self.records)?;
         self.cnt()?;
         let mut out = Vec::new();
         for (i, r) in self.records.iter_mut().enumerate() {
+            check_binary_type(r).map_err(at_record(i))?;
             out.extend(r.to_bytes().map_err(at_record(i))?);
         }
         Ok(out)
@@ -661,13 +667,55 @@ pub(crate) fn rebuild_cnt<'a>(first: &'a mut Record, rest: &[Record]) -> Result<
     add_cnt_entry(field, || Ok((Item::from(1), Item::from(count)))).map_err(at_record(0))?;
     for (i, r) in rest.iter().enumerate() {
         // `r.IDC` is read once the subfield is added: on error, the empty
-        // subfield stays, as in the reference implementation.
+        // subfield stays.
         add_cnt_entry(field, || {
             Ok((Item::from(r.record_type()), Item::from(r.idc()?)))
         })
         .map_err(at_record(i + 1))?;
     }
     Ok(field)
+}
+
+/// A binary record of a type other than 3 to 8, which the reading would
+/// take for a tagged one: refused by both writings.
+pub(crate) fn check_binary_type(r: &Record) -> Result<()> {
+    match r {
+        Record::Binary(b) if !(3..=8).contains(&b.record_type()) => {
+            let message = format!(
+                "a binary record of type {} cannot be written: only Types 3 to 8 are binary",
+                b.record_type()
+            );
+            Err(
+                Error::new(ErrorKind::TypeMismatch, message).with_position(Position {
+                    record_type: Some(b.record_type()),
+                    ..Position::default()
+                }),
+            )
+        }
+        _ => Ok(()),
+    }
+}
+
+/// An IDC holding a separator, which the CNT of the Type-1 copies: the error
+/// names the IDC, not the CNT that would be written first.
+pub(crate) fn check_idcs(records: &[Record]) -> Result<()> {
+    for (i, r) in records.iter().enumerate().skip(1) {
+        let Some(a) = r.as_ascii() else { continue };
+        let Some(field) = a.fields().iter().find(|f| f.alias() == alias::IDC) else {
+            continue;
+        };
+        if let AnyField::Text(f) = field {
+            no_separator(f.value().to_string().as_bytes()).map_err(|e| {
+                e.with_position(Position {
+                    record_index: Some(i),
+                    record_type: Some(r.record_type()),
+                    tag: Some(f.tag().clone()),
+                    ..Position::default()
+                })
+            })?;
+        }
+    }
+    Ok(())
 }
 
 fn cnt_position() -> Position {

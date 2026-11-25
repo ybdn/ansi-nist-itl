@@ -1,28 +1,28 @@
 [package]
 name = "ansi-nist-itl"
-version = "1.0.2"
+version = "1.1.0"
 edition = "2024"
-rust-version = "1.85"
-description = "Read, write and validate ANSI/NIST-ITL biometric files (NIST, EBTS, INT-I), byte for byte compatible with nistitl 0.6 (IDEMIA)"
+rust-version = "1.86"
+description = "Read, write and validate ANSI/NIST-ITL biometric files (NIST, EBTS, INT-I)"
 license = "MIT"
-repository = "https://github.com/ybdn-ei/ansi-nist-itl"
-homepage = "https://github.com/ybdn-ei/ansi-nist-itl"
+repository = "https://github.com/ybdn/ansi-nist-itl"
+homepage = "https://github.com/ybdn/ansi-nist-itl"
 documentation = "https://docs.rs/ansi-nist-itl"
 readme = "README.md"
 keywords = ["nist", "biometrics", "fingerprint", "ansi-nist-itl", "ebts"]
 categories = ["parser-implementations", "encoding"]
-exclude = ["/fuzz", "/tools", "/docs", "/.github"]
+exclude = ["/fuzz", "/tools", "/docs/ARCHITECTURE.md", "/docs/CONFORMANCE.md", "/docs/PRD.md", "/.github"]
 
 [package.metadata.docs.rs]
 all-features = true
 
 [dependencies]
-chrono = { version = "0.4.38", default-features = false, features = ["clock"], optional = true }
+jiff = { version = "0.2", default-features = false, features = ["tz-system", "tzdb-zoneinfo", "tzdb-concatenated", "tzdb-bundle-platform"], optional = true }
 serde = { version = "1.0.200", features = ["derive"], optional = true }
 
 [dev-dependencies]
-# 0.7: the last version for Rust 1.85 (QA-07).
-criterion = { version = "0.7", default-features = false, features = ["cargo_bench_support"] }
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
+libc = "0.2"
 proptest = { version = "1.5", default-features = false, features = ["std"] }
 serde_json = "1.0"
 
@@ -37,7 +37,7 @@ harness = false
 [features]
 default = ["local-date"]
 # Today's date in local time, as `datetime.today()`; UTC without it.
-local-date = ["dep:chrono"]
+local-date = ["dep:jiff"]
 # Serialize and Deserialize on the model (LIB-23).
 serde = ["dep:serde"]
 # Field dictionary of the standard (LIB-15).

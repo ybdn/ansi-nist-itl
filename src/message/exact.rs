@@ -3,7 +3,7 @@
 
 use std::borrow::Cow;
 
-use super::{Message, rebuild_cnt};
+use super::{Message, at_record, check_binary_type, check_idcs, rebuild_cnt};
 use crate::error::Result;
 use crate::record::Record;
 use crate::value::Value;
@@ -20,7 +20,7 @@ impl Message {
     /// Bytes of the message, identical to the bytes read for every record
     /// that did not change (LIB-12).
     ///
-    /// [`to_bytes`](Message::to_bytes) writes as the reference implementation does: fields
+    /// [`to_bytes`](Message::to_bytes) writes fields
     /// sorted, labels on 3 digits, LEN and CNT recomputed. This method keeps
     /// what was read instead:
     ///
@@ -32,7 +32,7 @@ impl Message {
     /// - the CNT of the Type-1 is recomputed only if the records, or their
     ///   types or IDCs, changed.
     ///
-    /// LEN and CNT values do not count as changes: the reference implementation recomputes them
+    /// LEN and CNT values do not count as changes: `to_bytes` recomputes them
     /// on write, so `to_bytes` then `to_bytes_exact` still gives the bytes
     /// read.
     ///
@@ -70,6 +70,7 @@ impl Message {
         let rebuilt = if same_layout {
             None
         } else {
+            check_idcs(&self.records)?;
             let mut first = self.records.first().cloned();
             if let Some(first) = &mut first {
                 rebuild_cnt(first, self.records.get(1..).unwrap_or_default())?;
@@ -77,10 +78,12 @@ impl Message {
             first
         };
         let record_bytes = |i: usize, r: &Record| -> Result<Vec<u8>> {
+            check_binary_type(r).map_err(at_record(i))?;
             match (&rebuilt, i) {
                 (Some(first), 0) => first.exact_bytes(true),
                 _ => r.exact_bytes(false),
             }
+            .map_err(at_record(i))
         };
 
         if same_layout && self.records.iter().all(|r| !r.segments().is_empty()) {
@@ -126,7 +129,7 @@ mod tests {
     use crate::record::AsciiRecord;
     use crate::{Field, Message};
 
-    /// `rec(t, body)`, as in the edge cases of the reference implementation: a tagged record whose LEN is
+    /// `rec(t, body)`, as in the edge cases: a tagged record whose LEN is
     /// computed, `body` holding the fields after LEN and the final FS.
     fn rec(t: u32, body: &[u8]) -> Vec<u8> {
         let head = format!("{t}.001:");

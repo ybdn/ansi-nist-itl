@@ -1,4 +1,4 @@
-//! Values that the reference implementation draws from the clock when creating a Type-1 record
+//! Values drawn from the clock when a Type-1 record is created
 //! (LIB-08): today's date and a transaction control number.
 
 use std::collections::hash_map::RandomState;
@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Values used instead of the clock when a record is created, for
 /// deterministic output.
 ///
-/// `None` keeps the value of the reference implementation: today's date (`1.005`, `AAAAMMJJ`) and
+/// `None` keeps the clock value: today's date (`1.005`, `AAAAMMJJ`) and
 /// a fresh `uuid.uuid1().hex` (`1.009`).
 ///
 /// ```
@@ -45,9 +45,10 @@ impl Defaults {
 /// `'%04d%02d%02d'` of `datetime.today()`: the local date.
 #[cfg(feature = "local-date")]
 fn today() -> String {
-    use chrono::Datelike;
-
-    let d = chrono::Local::now().date_naive();
+    // The system time zone, UTC when it cannot be found. Unlike `chrono`
+    // before 1.1, an invalid `TZ` (`TZ=Invalid/Zone`) gives UTC, not the zone
+    // of `/etc/localtime`. `tzdb-concatenated` reads the database of Android.
+    let d = jiff::Zoned::now().date();
     format!("{:04}{:02}{:02}", d.year(), d.month(), d.day())
 }
 

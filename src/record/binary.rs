@@ -7,7 +7,7 @@ use crate::structfmt::{self, StructValue};
 
 /// Binary record (`BinaryRecord`): Types 3 to 8.
 ///
-/// Only the length and the IDC are read, as the reference implementation does; the rest is the
+/// Only the length and the IDC are read, and nothing else; the rest is the
 /// raw value of the record, which [`pack`](BinaryRecord::pack) and
 /// [`unpack`](BinaryRecord::unpack) convert with Python's `struct` language.
 ///
@@ -286,7 +286,7 @@ impl BinaryRecord {
     /// Summary of the record (`str(record)`): LEN, IDC and the size of the
     /// value, then, if a format is kept, one line per value it unpacks.
     ///
-    /// Unpacking errors are returned, as the reference implementation raises them.
+    /// Unpacking errors are returned.
     ///
     /// ```
     /// use ansi_nist_itl::BinaryRecord;

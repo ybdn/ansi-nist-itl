@@ -1,6 +1,6 @@
 //! Python's `struct` language, as CPython 3.12 implements it.
 //!
-//! the reference implementation packs and unpacks the value of binary records with
+//! The crate packs and unpacks the value of binary records with
 //! `struct.pack` and `struct.unpack`. This module reproduces their sizes,
 //! alignments, conversions and error messages; Python exceptions become
 //! errors of kind [`ErrorKind::Struct`](crate::ErrorKind::Struct), except the
@@ -503,11 +503,14 @@ pub(crate) fn pack(format: &str, values: &[StructValue]) -> Result<Vec<u8>> {
                 let data = bytes_argument(code.code, value)?;
                 let field = out.get_mut(start..start + code.count).unwrap_or_default();
                 if code.code == b's' {
-                    let n = data.len().min(field.len());
-                    field[..n].copy_from_slice(&data[..n]);
+                    for (o, b) in field.iter_mut().zip(data) {
+                        *o = *b;
+                    }
                 } else if let Some((len, room)) = field.split_first_mut() {
                     let n = data.len().min(room.len());
-                    room[..n].copy_from_slice(&data[..n]);
+                    for (o, b) in room.iter_mut().zip(data) {
+                        *o = *b;
+                    }
                     *len = u8::try_from(n).unwrap_or(u8::MAX);
                 }
             }
@@ -539,9 +542,13 @@ pub(crate) fn pack(format: &str, values: &[StructValue]) -> Result<Vec<u8>> {
 /// Reads `data`, in the byte order of the format, as a little-endian `u128`.
 fn read_ordered(data: &[u8], little: bool) -> u128 {
     let mut le = [0u8; 16];
-    for (i, b) in data.iter().enumerate().take(16) {
-        let at = if little { i } else { data.len() - 1 - i };
-        le[at] = *b;
+    // `data` holds at most 8 bytes, the size of the largest integer code.
+    if little {
+        le.iter_mut().zip(data).for_each(|(o, b)| *o = *b);
+    } else {
+        le.iter_mut()
+            .zip(data.iter().rev())
+            .for_each(|(o, b)| *o = *b);
     }
     u128::from_le_bytes(le)
 }
@@ -579,7 +586,7 @@ pub(crate) fn unpack(format: &str, data: &[u8]) -> Result<Vec<StructValue>> {
                     field.to_vec()
                 } else {
                     match field.split_first() {
-                        Some((&len, room)) => room[..usize::from(len).min(room.len())].to_vec(),
+                        Some((&len, room)) => room.iter().take(usize::from(len)).copied().collect(),
                         None => Vec::new(),
                     }
                 };
@@ -868,7 +875,7 @@ mod tests {
     }
 }
 
-/// Vectors of `tools/oracle/gen_struct_vectors.py`, computed by CPython 3.12.
+/// Vectors of `tools/python/gen_struct_vectors.py`, computed by CPython 3.12.
 #[cfg(test)]
 mod cpython_vectors {
     use super::*;

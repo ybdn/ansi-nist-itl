@@ -6,7 +6,7 @@ use ansi_nist_itl::{
     AnyField, Diagnostic, DiagnosticCode, Message, ParseOptions, Parsed, Severity, Value,
 };
 
-/// `rec(t, body, first)` as in `tests/reference_edge_cases.rs`.
+/// `rec(t, body, first)` as in `tests/edge_cases.rs`.
 fn rec_with(t: u32, body: &[u8], first: u32) -> Vec<u8> {
     let head = format!("{t}.{first:03}:");
     (1..100_000)
