@@ -1,0 +1,1 @@
+probe coderabbit (doit être ignoré par le filtre)
